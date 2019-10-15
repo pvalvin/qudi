@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Camera</class>
+ <widget class="QWidget" name="Camera">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1004</width>
+    <height>714</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="1" column="0">
+    <widget class="QDockWidget" name="dockWidget">
+     <property name="minimumSize">
+      <size>
+       <width>58</width>
+       <height>65</height>
+      </size>
+     </property>
+     <property name="floating">
+      <bool>false</bool>
+     </property>
+     <property name="features">
+      <set>QDockWidget::AllDockWidgetFeatures</set>
+     </property>
+     <property name="windowTitle">
+      <string>Camera image</string>
+     </property>
+     <widget class="QWidget" name="dockWidgetContents">
+      <widget class="ScanPlotWidget" name="camera_ViewWidget">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>20</y>
+         <width>971</width>
+         <height>451</height>
+        </rect>
+       </property>
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>65</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="transformationAnchor">
+        <enum>QGraphicsView::AnchorUnderMouse</enum>
+       </property>
+      </widget>
+     </widget>
+    </widget>
+   </item>
+   <item row="0" column="0">
+    <layout class="QGridLayout" name="gridLayout_2">
+     <item row="0" column="5" rowspan="3">
+      <widget class="QListView" name="tracks_listView"/>
+     </item>
+     <item row="1" column="2">
+      <widget class="ScienDSpinBox" name="ybin_DoubleSpinBox">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>100</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="mouseTracking">
+        <bool>true</bool>
+       </property>
+       <property name="acceptDrops">
+        <bool>true</bool>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+       </property>
+       <property name="accelerated">
+        <bool>true</bool>
+       </property>
+       <property name="suffix">
+        <string/>
+       </property>
+       <property name="decimals">
+        <number>0</number>
+       </property>
+       <property name="minimum">
+        <double>0.000000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>1000000000.000000000000000</double>
+       </property>
+       <property name="value">
+        <double>1.000000000000000</double>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLabel" name="binning_x_label">
+       <property name="text">
+        <string>x</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="4">
+      <widget class="QLabel" name="tracks_label">
+       <property name="text">
+        <string>Tracks</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="0">
+      <widget class="QLabel" name="binning_label">
+       <property name="text">
+        <string>Binning</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QLabel" name="binning_y_label">
+       <property name="text">
+        <string>y</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="2">
+      <widget class="ScienDSpinBox" name="xbin_DoubleSpinBox">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>100</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="mouseTracking">
+        <bool>true</bool>
+       </property>
+       <property name="acceptDrops">
+        <bool>true</bool>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+       </property>
+       <property name="accelerated">
+        <bool>true</bool>
+       </property>
+       <property name="suffix">
+        <string/>
+       </property>
+       <property name="decimals">
+        <number>0</number>
+       </property>
+       <property name="minimum">
+        <double>0.000000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>1000000000.000000000000000</double>
+       </property>
+       <property name="value">
+        <double>1.000000000000000</double>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="3">
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeType">
+        <enum>QSizePolicy::Fixed</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>400</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ScanPlotWidget</class>
+   <extends>QGraphicsView</extends>
+   <header>qtwidgets.scan_plotwidget.h</header>
+  </customwidget>
+  <customwidget>
+   <class>ScienDSpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>qtwidgets.scientific_spinbox.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>
