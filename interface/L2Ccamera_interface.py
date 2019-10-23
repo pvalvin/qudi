@@ -23,8 +23,13 @@ class L2CSpectrometerInterface(metaclass=InterfaceMetaclass):
         les contraintes doivent permettre de répondre à la question : qu'est ce que tu supportes
         Par exemple : est ce que tu supportes le mode multi_spec ?
         est-ce que tu supportes un gain reglable ? et dans quelle gamme...
+
+        constraint : ['shutter_is_present'] = bool
         """
         pass
+        constrains = dict()
+        constrains['shutter_is_present'] = False
+        return constrains
 
     @abstract_interface_method
     def get_name(self):
@@ -93,7 +98,18 @@ class L2CSpectrometerInterface(metaclass=InterfaceMetaclass):
         pass
 
     @abstract_interface_method
-    def set_obtu_behaviour(self, obtu_behaviour):
+    def set_shutter_behaviour(self, shutter_behaviour):
+        """
+        Sets the shutter behaviour
+
+        @param str shutter_behaviour
+        @return str : new value
+
+        Possible values are :
+            "OPEN" = shutter is always open
+            "CLOSED" = shutter is always closed
+            "SYNC" = shutter is synchronized with a CCD trigger
+        """
         pass
 
     @abstract_interface_method
