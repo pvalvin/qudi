@@ -23,31 +23,38 @@ from core.interface import abstract_interface_method
 from core.meta import InterfaceMetaclass
 
 
-class L2CSpectrometerInterface(metaclass=InterfaceMetaclass):
+class PLSpectrometerInterface(metaclass=InterfaceMetaclass):
     """
     This is the Interface class to define the controls for an optical spectrometer.
     """
+    _grating = 0
+    _central_wavelength = 300
+    _input_port = 0
+    _input_slit_width = 100
+    _output_port = 0
 
-    @abstract_interface_method
     def get_spectrometer_constraints(self):
         """
-        constrains['gratings'] = [{'ruling': float,\
-                                    'blaze': string,\
-                                    'wavelength_min': float,\
-                                    'wavelength_max': float},\
-                                     ... ] - array size is number_of_gratings
-        constraints['input_ports'] = int number of input ports
-        constraints['output_ports'] = int number of input ports
-        constraints['input_slits'] = [{'is_present': bool, 'max_slit_width': int}, ...] - array size is number_of_input_port
-        constraints['output_slits'] = [{'is_present': bool, 'max_slit_width': int}, ...] - array size is number_of_input_port
+
         """
-        pass
+        constraints = dict()
+        constraints['gratings'] = [{'ruling': 300, 'blaze':300, 'wavelength_min':0, 'wavelength_max':1000},\
+                                  {'ruling': 1200, 'blaze':300, 'wavelength_min':0, 'wavelength_max':1000},\
+                                  {'ruling': 1800, 'blaze':250, 'wavelength_min':0, 'wavelength_max':1000}]
+        constraints['input_ports'] = 2
+        constraints['output_ports'] = 2
+        constraints['input_slits'] = [{'is_present':True, 'max_slit_width'=1500}, {'is_present':True, 'max_slit_width'=1500}]
+        constraints['output_slits'] = [{'is_present':False, 'max_slit_width'=0}, {'is_present':False, 'max_slit_width'=0}]
+
+        return constraints
+
 
     def set_grating(self, grating):
         """
         Sets a new grating (grating is an int value between 0 and len[gratings]-1)
         """
-        pass
+        self._grating = grating
+        return 0
 
     @abstract_interface_method
     def set_input_slit_width(self, input_slit_width):
@@ -55,7 +62,8 @@ class L2CSpectrometerInterface(metaclass=InterfaceMetaclass):
         Sets a new slit width (um) for input_port\
          (int value between 10 and max_slit_width)
         """
-        pass
+        self._input_slit_width = input_slit_width
+        return 0
 
     @abstract_interface_method
     def set_output_slit_width(self, output_slit_width):
@@ -63,6 +71,7 @@ class L2CSpectrometerInterface(metaclass=InterfaceMetaclass):
         Sets a new slit width (um) for output_port\
          (int value between 10 and max_slit_width)
         """
+
         pass
 
     @abstract_interface_method
@@ -94,13 +103,13 @@ class L2CSpectrometerInterface(metaclass=InterfaceMetaclass):
         """
         Returns the spectrometer serial number
         """
-        pass
+        return 'L2C dummy spectrometer'
 
     def get_grating(self):
         """
         Returns the current grating identification (0 to len[gratings]-1)
         """
-        pass
+        return 0
 
     @abstract_interface_method
     def get_input_slit_width(self, input_port):
@@ -108,7 +117,7 @@ class L2CSpectrometerInterface(metaclass=InterfaceMetaclass):
         Returns the current slit width (um) for param input_port\
          (int value between 10 and max_slit_width)
         """
-        pass
+        return 100
 
     @abstract_interface_method
     def get_output_slit_width(self, output_port):

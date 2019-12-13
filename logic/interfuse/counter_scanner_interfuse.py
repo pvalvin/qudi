@@ -21,7 +21,13 @@ top-level directory of this distribution and at <https://github.com/Ulm-IQO/qudi
 
 import numpy as np
 
+<<<<<<< refs/remotes/AdrienR09/hirondelle200
 from core.module import Base, Connector, ConfigOption
+=======
+from core.module import Base, Connector
+from core.configoption import ConfigOption
+
+>>>>>>> backup for test with logic
 from interface.confocal_scanner_interface import ConfocalScannerInterface
 
 
