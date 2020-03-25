@@ -1,28 +1,32 @@
 # -*- coding: utf-8 -*-
 
 
-from core.module import Base
-from interface.spectrometer_interface import SpectrometerInterface
-from core.util.modules import get_main_dir
+import ctypes as ct
 import os
-from enum import Enum
+import time
 
 import numpy as np
 
-import ctypes as ct
-import time
+from core.configoption import ConfigOption
+from core.module import Base
+from core.util.modules import get_main_dir
+from interface.spectrometer_interface import SpectrometerInterface
 
 
 class Shamrock(Base, SpectrometerInterface):
 
     _dll_location = ConfigOption('dll_location', missing='error')
 
+    ##############################################################################
+    #                            Basic functions
+    ##############################################################################
+
     def on_activate(self):
         """ Activate module.
         """
         self.errorcode = self._create_errorcode()
 
-        self.dll = ct.cdll.LoadLibrary('dll_location') # adresse du fichier .dll dans le fichier .cfg
+        self.dll = ct.cdll.LoadLibrary(_dll_location) # adresse du fichier .dll dans le fichier .cfg
         self.dll.ShamrockInitialize()
 
         nd = ct.c_int()
@@ -71,6 +75,8 @@ class Shamrock(Base, SpectrometerInterface):
 
 
 ############### functions necessary for L2Cspectro_interface ##########################
+
+
 
     def get_grating(self):
         grating = ct.c_int()
@@ -161,7 +167,7 @@ class Shamrock(Base, SpectrometerInterface):
         self.check(self.dll.ShamrockNumberOfDevices(ct.byref(number_of_devices)))
         return number_of_devices.value
 
-    def shamrock_get_function_return_description()
+    def shamrock_get_function_return_description():
         """TODO"""
         return
 

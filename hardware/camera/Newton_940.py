@@ -106,14 +106,13 @@ class Newton940(Base, CameraInterface):
     _modtype = 'camera'
     _modclass = 'hardware'
 
+    _dll_location = ConfigOption('dll_location', missing='error')
     _default_exposure = ConfigOption('default_exposure', 1.0)
     _default_read_mode = ConfigOption('default_read_mode', 'IMAGE')
     _default_temperature = ConfigOption('default_temperature', -70)
     _default_cooler_on = ConfigOption('default_cooler_on', True)
     _default_acquisition_mode = ConfigOption('default_acquisition_mode', 'SINGLE_SCAN')
     _default_trigger_mode = ConfigOption('default_trigger_mode', 'INTERNAL')
-    #_dll_location = ConfigOption('dll_location', missing='error')
-    #_dll_location = 'ATMCD32D.dll'
 
     _exposure = _default_exposure
     _temperature = _default_temperature
@@ -142,8 +141,7 @@ class Newton940(Base, CameraInterface):
         # self.set_cooler_on_state(self._cooler_on)
         # self.set_exposure(self._exposure)
         # self.set_setpoint_temperature(self._temperature)
-        #self.dll = cdll.LoadLibrary(self._dll_location)
-        self.dll = cdll.LoadLibrary('C:/temp/atmcd64d.dll')
+        self.dll = cdll.LoadLibrary(_dll_location)
 
         self.dll.Initialize()
         nx_px, ny_px = c_int(), c_int()
