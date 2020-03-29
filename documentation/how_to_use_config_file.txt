@@ -102,7 +102,7 @@ A reference to the connected module can then be obtained at runtime by just call
 
 ```python
 <connected module> = self.<connector name>()
-<antother connected module> = self.<another connector name>()
+<another connected module> = self.<another connector name>()
 ```
 
 ### Optional connectors

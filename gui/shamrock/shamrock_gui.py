@@ -24,24 +24,24 @@ import pyqtgraph as pg
 import numpy as np
 
 from core.connector import Connector
+from core.statusvariable import StatusVar
 from core.util import units
 
 from gui.colordefs import QudiPalettePale as palette
 from gui.guibase import GUIBase
-from gui.fitsettings import FitSettingsDialog, FitSettingsComboBox
 from qtpy import QtCore
 from qtpy import QtWidgets
 from qtpy import uic
 
 
-class SpectrometerWindow(QtWidgets.QMainWindow):
+class HirondelleWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
         """ Create the laser scanner window.
         """
         # Get the path to the *.ui file
         this_dir = os.path.dirname(__file__)
-        ui_file = os.path.join(this_dir, 'ui_shamrock_spectrometer.ui')
+        ui_file = os.path.join(this_dir, 'ui_hirondelle200.ui')
 
         # Load it
         super().__init__()
@@ -49,12 +49,16 @@ class SpectrometerWindow(QtWidgets.QMainWindow):
         self.show()
 
 
-class SpectrometerGui(GUIBase):
+class HirondelleGui(GUIBase):
     """
     """
 
     # declare connectors
-    spectrum_logic_connector = Connector(interface='spectrumlogic')
+    spectrumlogic = Connector(interface='ShamrockLogic')
+
+    # Import last spectrum and background or initialize :
+    _spectrum_data = StatusVar('spectrum_data', np.empty((2, 0)))
+    _background_data = StatusVar('background_data', np.empty((2, 0)))
 
     def __init__(self, config, **kwargs):
         super().__init__(config=config, **kwargs)
@@ -64,14 +68,10 @@ class SpectrometerGui(GUIBase):
         """
 
         # connect the logic module from the declared connector
-        self._spectrum_logic = self.spectrum_logic_connector()
+        self._spectrum_logic = self.spectrumlogic()
 
         # setting up the window
-        self._mw = SpectrometerWindow()
-
-        self._mw.run_acquisition_Action.triggered.connect(self.run_acquisition)
-
-        self._mw.stop_acquisition_Action.triggered.connect(self.stop_acquisition)
+        self._mw = HirondelleWindow()
 
         # giving the plots names allows us to link their axes together
         self._plot = self._mw.plotWidget
@@ -104,13 +104,59 @@ class SpectrometerGui(GUIBase):
         self._curve1.setPen(palette.c1, width=2)
 
         # Connect signals
-        self._mw.run_acquisition_Action.triggered.connect(self.run_acquisition)
+        self._mw.actionRun.clicked.connect(self.run_acquisition)
+        self._mw.actionStop.clicked.connect(self.stop_acquisition)
+        self._mw.readMode.currentIndexChanged.connect(self.set_read_mode)
+        self._mw.acquisitionStop.currentIndexChanged.connect(self.set_acquisition_mode)
 
-        self._mw.stop_acquisition_Action.triggered.connect(self.stop_acquisition)
 
-        self.update_data()
+        # Initialize widgets slots :
+        self._mw.centerWavelength.setValue()
+        self._mw.detectorOffset.setValue(self._detector_offset)
+        self._mw.gratingNum.setCurrentIndex(self._grating)
+        self._mw.inputSlit.setCurrentIndex(self._input_slit)
+        self._mw.inputSlitWidth.setCurrentIndex(self._input_slit_width)
+        self._mw.outputSlit.setCurrentIndex(self._output_slit)
+        self._mw.outputSlitWidth.setCurrentIndex(self._output_slit_width)
+
+        self.read_settings()
+
+        self.show()
 
         self._save_PNG = True
+
+    def update_settings(self):
+
+        self._center_wavelength = self._mw.centerWavelength.value()
+        self._detector_offset = self._mw.detectorOffset.value()
+        self._grating = self._mw.gratingNum.currentIndex()
+        self._input_slit = self._mw.inputSlit.currentIndex()
+        self._input_slit_width = self._mw.inputSlitWidth.currentIndex()
+        self._output_slit = self._mw.outputSlit.currentIndex()
+        self._output_slit_width = self._mw.outputSlitWidth.currentIndex()
+
+        self._spectrum_logic.center_wavelength = self._center_wavelength
+        self._spectrum_logic.detector_offset = self._detector_offset
+        self._spectrum_logic.grating = self._grating
+        self._spectrum_logic.input_slit = self._input_slit
+        self._spectrum_logic.input_slit_width = self._input_slit_width
+        self._spectrum_logic.output_slit = self._output_slit
+        self._spectrum_logic.output_slit_width = self._output_slit_width
+
+        self._min_wavelength, self._max_wavelength = self._spectrum_logic.wavelength_limits
+
+
+    def read_settings(self):
+
+        self._center_wavelength = self._spectrum_logic.center_wavelength
+        self._detector_offset =self._spectrum_logic.detector_offset
+        self._grating = self._spectrum_logic.grating
+        self._input_slit = self._spectrum_logic.input_slit
+        self._input_slit_width = self._spectrum_logic.input_slit_width
+        self._output_slit = self._spectrum_logic.output_slit
+        self._output_slit_width = self._spectrum_logic.output_slit_width
+
+        self._min_wavelength, self._max_wavelength = self._spectrum_logic.wavelength_limits
 
     def on_deactivate(self):
         """ Deinitialisation performed during deactivation of the module.
@@ -129,9 +175,11 @@ class SpectrometerGui(GUIBase):
         """Run the spectrum acquisition called from run_acquisition_Action
         and plot the spectrum data obtained.
         """
+        self.update_settings()
         self._spectrum_logic.acquire_single_spectrum()
         data = self._spectrum_logic._spectrum_data
-        self._curve1.setData(x=data[0,:],y=data[1,:])
+        _wavelength_axis = np.linspace(self._min_wavelength,self._max_wavelength,len(self.data))
+        self._curve1.setData(_wavelength_axis,data)
 
     def stop_acquisition(self):
         """Stop the spectrum acquisition called from run_acquisition_Action

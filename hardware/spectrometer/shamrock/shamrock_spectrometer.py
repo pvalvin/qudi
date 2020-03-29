@@ -26,7 +26,7 @@ class Shamrock(Base, SpectrometerInterface):
         """
         self.errorcode = self._create_errorcode()
 
-        self.dll = ct.cdll.LoadLibrary(_dll_location) # adresse du fichier .dll dans le fichier .cfg
+        self.dll = ct.cdll.LoadLibrary(self._dll_location) # adresse du fichier .dll dans le fichier .cfg
         self.dll.ShamrockInitialize()
 
         nd = ct.c_int()

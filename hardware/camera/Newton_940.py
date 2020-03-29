@@ -28,7 +28,8 @@ from enum import Enum
 from ctypes import *
 import numpy as np
 
-from core.module import Base, ConfigOption
+from core.module import Base
+from core.configoption import ConfigOption
 
 
 from interface.camera_interface import CameraInterface
@@ -132,6 +133,10 @@ class Newton940(Base, CameraInterface):
     _scans = 1 #TODO get from camera
     _acquiring = False
 
+    ##############################################################################
+    #                            Basic functions
+    ##############################################################################
+
     def on_activate(self):
         """ Initialisation performed during activation of the module.
          """
@@ -141,7 +146,7 @@ class Newton940(Base, CameraInterface):
         # self.set_cooler_on_state(self._cooler_on)
         # self.set_exposure(self._exposure)
         # self.set_setpoint_temperature(self._temperature)
-        self.dll = cdll.LoadLibrary(_dll_location)
+        self.dll = cdll.LoadLibrary(self._dll_location)
 
         self.dll.Initialize()
         nx_px, ny_px = c_int(), c_int()
@@ -158,6 +163,149 @@ class Newton940(Base, CameraInterface):
         self.stop_acquisition()
         self._set_shutter(0, 0, 0.1, 0.1)
         self._shut_down()
+
+    ##############################################################################
+    #                            Acquisition parameteres
+    ##############################################################################
+
+    def _set_exposuretime(self, time):
+        """
+        @param float time: exposure duration
+        @return string answer from the camera
+        """
+        error_code = self.dll.SetExposureTime(c_float(time))
+        return ERROR_DICT[error_code]
+
+    def set_exposure(self, exposure):
+        """ Set the exposure time in seconds
+
+        @param float time: desired new exposure time
+
+        @return bool: Success?
+        """
+        msg = self._set_exposuretime(exposure)
+        if msg == "DRV_SUCCESS":
+            self._exposure = exposure
+            return True
+        else:
+            return False
+
+    def get_exposure(self):
+        """ Get the exposure time in seconds
+
+        @return float exposure time
+        """
+        self._get_acquisition_timings()
+        return self._exposure
+
+
+    def _get_temperature(self):
+        temp = c_int()
+        error_code = self.dll.GetTemperature(byref(temp))
+        if ERROR_DICT[error_code] != 'DRV_SUCCESS':
+            self.log.error('Can not retrieve temperature'.format(ERROR_DICT[error_code]))
+        return temp.value
+
+    def _get_temperature_f(self):
+        """
+        Status of the cooling process + current temperature
+        @return: (float, str) containing current temperature and state of the cooling process
+        """
+        temp = c_float()
+        error_code = self.dll.GetTemperatureF(byref(temp))
+
+        return temp.value, ERROR_DICT[error_code]
+
+    def _get_acquisition_timings(self):
+        exposure = c_float()
+        accumulate = c_float()
+        kinetic = c_float()
+        error_code = self.dll.GetAcquisitionTimings(byref(exposure),
+                                               byref(accumulate),
+                                               byref(kinetic))
+        self._exposure = exposure.value
+        self._accumulate = accumulate.value
+        self._kinetic = kinetic.value
+        return ERROR_DICT[error_code]
+
+    # not sure if the distinguishing between gain setting and gain value will be problematic for
+    # this camera model. Just keeping it in mind for now.
+    #TODO: Not really funcitonal right now.
+    def set_gain(self, gain):
+        """ Set the gain
+
+        @param float gain: desired new gain
+
+        @return float: new exposure gain
+        """
+        n_pre_amps = self._get_number_preamp_gains()
+        msg = ''
+        if (gain >= 0) & (gain < n_pre_amps):
+            msg = self._set_preamp_gain(gain)
+        else:
+            self.log.warning('Choose gain value between 0 and {0}'.format(n_pre_amps-1))
+        if msg == 'DRV_SUCCESS':
+            self._gain = gain
+        else:
+            self.log.warning('The gain wasn\'t set. {0}'.format(msg))
+        return self._gain
+
+    def get_gain(self):
+        """ Get the gain
+
+        @return float: exposure gain
+        """
+        _, self._gain = self._get_preamp_gain()
+        return self._gain
+
+
+    ##############################################################################
+    #                            Read Mode functions
+    ##############################################################################
+
+    def _set_read_mode(self, mode):
+        """
+        @param string mode: string corresponding to certain ReadMode
+        @return string answer from the camera
+        """
+        check_val = 0
+
+        if hasattr(ReadMode, mode):
+            n_mode = getattr(ReadMode, mode).value
+            n_mode = c_int(n_mode)
+            error_code = self.dll.SetReadMode(n_mode)
+            if mode == 'IMAGE':
+                self.log.debug("widt:{0}, height:{1}".format(self._width, self._height))
+                msg = self._set_image(1, 1, 1, self._width, 1, self._height)
+                if msg != 'DRV_SUCCESS':
+                    self.log.warning('{0}'.format(ERROR_DICT[error_code]))
+        if ERROR_DICT[error_code] != 'DRV_SUCCESS':
+            self.log.warning('Readmode was not set: {0}'.format(ERROR_DICT[error_code]))
+            check_val = -1
+        else:
+            self._read_mode = mode
+
+        return check_val
+
+
+
+
+    ##############################################################################
+    #                            Acquisition Mode functions
+    ##############################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def get_name(self):
         """ Retrieve an identifier of the camera that the GUI can print
@@ -278,58 +426,6 @@ class Newton940(Base, CameraInterface):
         self._cur_image = image_array
         return image_array
 
-    def set_exposure(self, exposure):
-        """ Set the exposure time in seconds
-
-        @param float time: desired new exposure time
-
-        @return bool: Success?
-        """
-        msg = self._set_exposuretime(exposure)
-        if msg == "DRV_SUCCESS":
-            self._exposure = exposure
-            return True
-        else:
-            return False
-
-    def get_exposure(self):
-        """ Get the exposure time in seconds
-
-        @return float exposure time
-        """
-        self._get_acquisition_timings()
-        return self._exposure
-
-    # not sure if the distinguishing between gain setting and gain value will be problematic for
-    # this camera model. Just keeping it in mind for now.
-    #TODO: Not really funcitonal right now.
-    def set_gain(self, gain):
-        """ Set the gain
-
-        @param float gain: desired new gain
-
-        @return float: new exposure gain
-        """
-        n_pre_amps = self._get_number_preamp_gains()
-        msg = ''
-        if (gain >= 0) & (gain < n_pre_amps):
-            msg = self._set_preamp_gain(gain)
-        else:
-            self.log.warning('Choose gain value between 0 and {0}'.format(n_pre_amps-1))
-        if msg == 'DRV_SUCCESS':
-            self._gain = gain
-        else:
-            self.log.warning('The gain wasn\'t set. {0}'.format(msg))
-        return self._gain
-
-    def get_gain(self):
-        """ Get the gain
-
-        @return float: exposure gain
-        """
-        _, self._gain = self._get_preamp_gain()
-        return self._gain
-
     def get_ready_state(self):
         """ Is the camera ready for an acquisition ?
 
@@ -431,38 +527,6 @@ class Newton940(Base, CameraInterface):
         error_code = self.dll.SetShutter(typ, mode, closingtime, openingtime)
 
         return ERROR_DICT[error_code]
-
-    def _set_exposuretime(self, time):
-        """
-        @param float time: exposure duration
-        @return string answer from the camera
-        """
-        error_code = self.dll.SetExposureTime(c_float(time))
-        return ERROR_DICT[error_code]
-
-    def _set_read_mode(self, mode):
-        """
-        @param string mode: string corresponding to certain ReadMode
-        @return string answer from the camera
-        """
-        check_val = 0
-
-        if hasattr(ReadMode, mode):
-            n_mode = getattr(ReadMode, mode).value
-            n_mode = c_int(n_mode)
-            error_code = self.dll.SetReadMode(n_mode)
-            if mode == 'IMAGE':
-                self.log.debug("widt:{0}, height:{1}".format(self._width, self._height))
-                msg = self._set_image(1, 1, 1, self._width, 1, self._height)
-                if msg != 'DRV_SUCCESS':
-                    self.log.warning('{0}'.format(ERROR_DICT[error_code]))
-        if ERROR_DICT[error_code] != 'DRV_SUCCESS':
-            self.log.warning('Readmode was not set: {0}'.format(ERROR_DICT[error_code]))
-            check_val = -1
-        else:
-            self._read_mode = mode
-
-        return check_val
 
     def _set_trigger_mode(self, mode):
         """
@@ -598,18 +662,6 @@ class Newton940(Base, CameraInterface):
         error_code = self.dll.GetCameraSerialNumber(byref(number))
         return ERROR_DICT[error_code]
 
-    def _get_acquisition_timings(self):
-        exposure = c_float()
-        accumulate = c_float()
-        kinetic = c_float()
-        error_code = self.dll.GetAcquisitionTimings(byref(exposure),
-                                               byref(accumulate),
-                                               byref(kinetic))
-        self._exposure = exposure.value
-        self._accumulate = accumulate.value
-        self._kinetic = kinetic.value
-        return ERROR_DICT[error_code]
-
     def _get_oldest_image(self):
         """ Return an array of last acquired image.
 
@@ -675,23 +727,6 @@ class Newton940(Base, CameraInterface):
         gain = c_float()
         self.dll.GetPreAmpGain(index, byref(gain))
         return index.value, gain.value
-
-    def _get_temperature(self):
-        temp = c_int()
-        error_code = self.dll.GetTemperature(byref(temp))
-        if ERROR_DICT[error_code] != 'DRV_SUCCESS':
-            self.log.error('Can not retrieve temperature'.format(ERROR_DICT[error_code]))
-        return temp.value
-
-    def _get_temperature_f(self):
-        """
-        Status of the cooling process + current temperature
-        @return: (float, str) containing current temperature and state of the cooling process
-        """
-        temp = c_float()
-        error_code = self.dll.GetTemperatureF(byref(temp))
-
-        return temp.value, ERROR_DICT[error_code]
 
     def _get_size_of_circular_ring_buffer(self):
         index = c_long()

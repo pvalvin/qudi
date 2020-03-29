@@ -16,9 +16,9 @@ You should have received a copy of the GNU General Public License
 along with Qudi. If not, see <http://www.gnu.org/licenses/>.
 
 Copyright (c) the Qudi Developers. See the COPYRIGHT.txt file at the
-top-level directory of this distribution and at <https://github.com/Ulm-IQO/qudi/>
+top-level d
+irectory of this distribution and at <https://github.com/Ulm-IQO/qudi/>
 """
-
 from qtpy import QtCore
 from collections import OrderedDict
 import numpy as np
