@@ -63,6 +63,8 @@ class Shamrock(Base,SpectrometerInterface):
 
         error = self.dll.ShamrockInitialize()
 
+        self._device = 0
+
         return self.error_message(error, "Initialize")
 
     def on_deactivate(self):

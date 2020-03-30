@@ -48,6 +48,7 @@ class ShamrockLogic(GenericLogic):
     _output_slit = StatusVar('output_slit', 0)
     _input_slit_width = StatusVar('input_slit_width', 100)
     _output_slit_width = StatusVar('output_slit_width', 100)
+    _center_wavelength = 0
 
     # Internal signals
     sign_specdata_updated = QtCore.Signal()
@@ -77,7 +78,7 @@ class ShamrockLogic(GenericLogic):
         self.spectrometer_device = self.spectrometer()
         self.camera_device = self.camera()
 
-        _center_wavelength = self.center_wavelength
+        self._center_wavelength = self.center_wavelength
 
 
     def on_deactivate(self):

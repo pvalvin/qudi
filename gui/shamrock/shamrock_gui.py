@@ -104,8 +104,8 @@ class HirondelleGui(GUIBase):
         self._curve1.setPen(palette.c1, width=2)
 
         # Connect signals
-        self._mw.actionRun.clicked.connect(self.run_acquisition)
-        self._mw.actionStop.clicked.connect(self.stop_acquisition)
+        self._mw.runButton.clicked.connect(self.run_acquisition)
+        self._mw.stopButton.clicked.connect(self.stop_acquisition)
         self._mw.readMode.currentIndexChanged.connect(self.set_read_mode)
         self._mw.acquisitionStop.currentIndexChanged.connect(self.set_acquisition_mode)
 

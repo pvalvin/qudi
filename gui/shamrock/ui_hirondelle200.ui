@@ -138,14 +138,14 @@
           <item>
            <layout class="QVBoxLayout" name="verticalLayout">
             <item>
+             <widget class="QSpinBox" name="detectorOffset"/>
+            </item>
+            <item>
              <widget class="QDoubleSpinBox" name="centerWavelength">
               <property name="wrapping">
                <bool>false</bool>
               </property>
              </widget>
-            </item>
-            <item>
-             <widget class="QSpinBox" name="detectorOffset"/>
             </item>
             <item>
              <widget class="QComboBox" name="gratingNum">
@@ -256,7 +256,7 @@
           <item>
            <layout class="QVBoxLayout" name="verticalLayout_5">
             <item>
-             <widget class="QComboBox" name="readoutMode">
+             <widget class="QComboBox" name="readMode">
               <item>
                <property name="text">
                 <string>Full Vertical Binning (0)</string>
