@@ -73,6 +73,7 @@ class HirondelleGui(GUIBase):
         # setting up the window
         self._mw = HirondelleWindow()
 
+
         # giving the plots names allows us to link their axes together
         self._plot = self._mw.plotWidget
         self._plot_item = self._plot.plotItem
@@ -106,20 +107,24 @@ class HirondelleGui(GUIBase):
         # Connect signals
         self._mw.runButton.clicked.connect(self.run_acquisition)
         self._mw.stopButton.clicked.connect(self.stop_acquisition)
-        self._mw.readMode.currentIndexChanged.connect(self.set_read_mode)
-        self._mw.acquisitionStop.currentIndexChanged.connect(self.set_acquisition_mode)
 
+        self._center_wavelength = self._spectrum_logic.center_wavelength
+        self._detector_offset = self._spectrum_logic.detector_offset
+        self._grating = self._spectrum_logic.grating
+        self._input_slit = self._spectrum_logic.input_slit
+        self._input_slit_width = self._spectrum_logic.input_slit_width
+        self._output_slit = self._spectrum_logic.output_slit
+        self._output_slit_width = self._spectrum_logic.output_slit_width
+        self._min_wavelength, self._max_wavelength = self._spectrum_logic.wavelength_limits
 
         # Initialize widgets slots :
-        self._mw.centerWavelength.setValue()
+        self._mw.centerWavelength.setValue(self._center_wavelength)
         self._mw.detectorOffset.setValue(self._detector_offset)
         self._mw.gratingNum.setCurrentIndex(self._grating)
         self._mw.inputSlit.setCurrentIndex(self._input_slit)
-        self._mw.inputSlitWidth.setCurrentIndex(self._input_slit_width)
+        self._mw.inputSlitWidth.setValue(self._input_slit_width)
         self._mw.outputSlit.setCurrentIndex(self._output_slit)
-        self._mw.outputSlitWidth.setCurrentIndex(self._output_slit_width)
-
-        self.read_settings()
+        self._mw.outputSlitWidth.setValue(self._output_slit_width)
 
         self.show()
 
@@ -131,9 +136,9 @@ class HirondelleGui(GUIBase):
         self._detector_offset = self._mw.detectorOffset.value()
         self._grating = self._mw.gratingNum.currentIndex()
         self._input_slit = self._mw.inputSlit.currentIndex()
-        self._input_slit_width = self._mw.inputSlitWidth.currentIndex()
+        self._input_slit_width = self._mw.inputSlitWidth.value()
         self._output_slit = self._mw.outputSlit.currentIndex()
-        self._output_slit_width = self._mw.outputSlitWidth.currentIndex()
+        self._output_slit_width = self._mw.outputSlitWidth.value()
 
         self._spectrum_logic.center_wavelength = self._center_wavelength
         self._spectrum_logic.detector_offset = self._detector_offset
@@ -142,21 +147,6 @@ class HirondelleGui(GUIBase):
         self._spectrum_logic.input_slit_width = self._input_slit_width
         self._spectrum_logic.output_slit = self._output_slit
         self._spectrum_logic.output_slit_width = self._output_slit_width
-
-        self._min_wavelength, self._max_wavelength = self._spectrum_logic.wavelength_limits
-
-
-    def read_settings(self):
-
-        self._center_wavelength = self._spectrum_logic.center_wavelength
-        self._detector_offset =self._spectrum_logic.detector_offset
-        self._grating = self._spectrum_logic.grating
-        self._input_slit = self._spectrum_logic.input_slit
-        self._input_slit_width = self._spectrum_logic.input_slit_width
-        self._output_slit = self._spectrum_logic.output_slit
-        self._output_slit_width = self._spectrum_logic.output_slit_width
-
-        self._min_wavelength, self._max_wavelength = self._spectrum_logic.wavelength_limits
 
     def on_deactivate(self):
         """ Deinitialisation performed during deactivation of the module.
@@ -176,7 +166,7 @@ class HirondelleGui(GUIBase):
         and plot the spectrum data obtained.
         """
         self.update_settings()
-        self._spectrum_logic.acquire_single_spectrum()
+        self._spectrum_logic.acquire_spectrum()
         data = self._spectrum_logic._spectrum_data
         _wavelength_axis = np.linspace(self._min_wavelength,self._max_wavelength,len(self.data))
         self._curve1.setData(_wavelength_axis,data)

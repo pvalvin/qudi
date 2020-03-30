@@ -62,7 +62,7 @@ class Shamrock(Base,SpectrometerInterface):
         self.dll = ct.cdll.LoadLibrary(self._dll_location)
 
         error = self.dll.ShamrockInitialize()
-
+        
         self._device = 0
 
         return self.error_message(error, "Initialize")

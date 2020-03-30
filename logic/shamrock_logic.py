@@ -22,7 +22,7 @@ top-level directory of this distribution and at <https://github.com/Ulm-IQO/qudi
 from qtpy import QtCore
 from collections import OrderedDict
 import numpy as np
-import matplot.pyplot as plt
+import matplotlib.pyplot as plt
 
 from core.connector import Connector
 from core.statusvariable import StatusVar
@@ -37,7 +37,7 @@ class ShamrockLogic(GenericLogic):
 
     # declare connectors
     spectrometer = Connector(interface='SpectrometerInterface')
-    camera = Connector(interface='camera_deviceInterface')
+    camera = Connector(interface='CameraInterface')
 
     # declare status variables
     _spectrum_data = StatusVar('spectrum_data', np.empty((2, 0)))
@@ -48,7 +48,7 @@ class ShamrockLogic(GenericLogic):
     _output_slit = StatusVar('output_slit', 0)
     _input_slit_width = StatusVar('input_slit_width', 100)
     _output_slit_width = StatusVar('output_slit_width', 100)
-    _center_wavelength = 0
+    _center_wavelength = StatusVar('center_wavelength', 400)
 
     # Internal signals
     sign_specdata_updated = QtCore.Signal()
@@ -78,7 +78,6 @@ class ShamrockLogic(GenericLogic):
         self.spectrometer_device = self.spectrometer()
         self.camera_device = self.camera()
 
-        self._center_wavelength = self.center_wavelength
 
 
     def on_deactivate(self):
@@ -122,32 +121,28 @@ class ShamrockLogic(GenericLogic):
             self.spectrometer_device.set_grating(grating_number)
             self.log.info('Spectrometer grating has been changed correctly ')
             self._grating = grating_number
-            return 1
         else:
             if not parameter_correct:
                 self.log.debug('Grating parameter is not correct : it must be an integer ranging from 1 to 3 ')
             else:
                 self.log.debug('Grating parameter is equal to the current grating used ')
-            return 0
 
     @property
     def center_wavelength(self):
-        return self.spectrometer_device.get_central_wavelength()
+        return self.spectrometer_device.get_wavelength()
 
     @center_wavelength.setter
-    def center_wavelength(self,wavelength):
+    def center_wavelength(self, wavelength):
         parameter_correct = type(wavelength) is (float or int)
-        if parameter_correct and wavelength!= self._center_wavelength:
-            self.spectrometer_device.set_central_wavelength(float(wavelength))
+        if parameter_correct and wavelength != self._center_wavelength:
+            self.spectrometer_device.set_wavelength(float(wavelength))
             self.log.info('Central wavelength has been changed correctly ')
             self._center_wavelength = wavelength
-            return 1
         else:
             if not parameter_correct:
                 self.log.debug('Wavelength parameter is not correct : it must be an integer or a float ')
             else:
                 self.log.debug('Wavelength parameter is equal to the current central wavelength ')
-            return 0
 
     @property
     def wavelength_limits(self):
@@ -158,19 +153,17 @@ class ShamrockLogic(GenericLogic):
         return self.spectrometer_device.get_detector_offset()
 
     @detector_offset.setter
-    def center_wavelength(self,offset):
+    def detector_offset(self,offset):
         parameter_correct = type(offset) is int
-        if parameter_correct and offset!= self._detector_offset:
+        if parameter_correct and offset != self._detector_offset:
             self.spectrometer_device.set_detector_offset(offset)
             self.log.info('Detector offset has been set correctly ')
             self._detector_offset = offset
-            return 1
         else:
             if not parameter_correct:
                 self.log.debug('Offset parameter is not correct : it must be an integer  ')
             else:
                 self.log.debug('Offset parameter is equal to the actual detector offset ')
-            return 0
 
     @property
     def input_slit(self):
@@ -183,13 +176,11 @@ class ShamrockLogic(GenericLogic):
             self.spectrometer_device.set_flipper_mirror_position(0,position)
             self.log.info('Input slit has been selected correctly ')
             self._input_slit = position
-            return 1
         else:
             if not parameter_correct:
                 self.log.debug('Slit selection parameter is not correct : it must be an integer ')
             else:
                 self.log.debug('Slit selection parameter is equal to the current input slit ')
-            return 0
 
     @property
     def output_slit(self):
@@ -202,13 +193,11 @@ class ShamrockLogic(GenericLogic):
             self.spectrometer_device.set_flipper_mirror_position(1,position)
             self.log.info('Output slit has been selected correctly ')
             self._output_slit = position
-            return 1
         else:
             if not parameter_correct:
                 self.log.debug('Slit selection parameter is not correct : it must be an integer ')
             else:
                 self.log.debug('Slit selection parameter is equal to the current output slit ')
-            return 0
 
     @property
     def input_slit_width(self):
@@ -221,7 +210,6 @@ class ShamrockLogic(GenericLogic):
             self.spectrometer_device.set_auto_slit_width(0, width)
             self.log.info('Input slit width has been selected correctly ')
             self._input_slit_width = width
-            return 1
         else:
             if not parameter_correct:
                 self.log.debug('Slit selection parameter is not correct : it must be a float ')
@@ -229,7 +217,7 @@ class ShamrockLogic(GenericLogic):
                 self.log.debug('Slit width parameter is not correct : it must be positive ')
             else:
                 self.log.debug('Slit selection parameter is equal to the current input slit width ')
-            return 0
+
 
     @property
     def output_slit_width(self):
@@ -242,7 +230,6 @@ class ShamrockLogic(GenericLogic):
             self.spectrometer_device.set_auto_slit_width(1, width)
             self.log.info('Output slit width has been selected correctly ')
             self._output_slit_width = width
-            return 1
         else:
             if not parameter_correct:
                 self.log.debug('Slit width parameter is not correct : it must be a float ')
@@ -250,4 +237,3 @@ class ShamrockLogic(GenericLogic):
                 self.log.debug('Slit width parameter is not correct : it must be positive ')
             else:
                 self.log.debug('Slit width parameter is equal to the current output slit width ')
-            return 0
