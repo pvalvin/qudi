@@ -56,10 +56,6 @@ class HirondelleGui(GUIBase):
     # declare connectors
     spectrumlogic = Connector(interface='ShamrockLogic')
 
-    # Import last spectrum and background or initialize :
-    _spectrum_data = StatusVar('spectrum_data', np.empty((2, 0)))
-    _background_data = StatusVar('background_data', np.empty((2, 0)))
-
     def __init__(self, config, **kwargs):
         super().__init__(config=config, **kwargs)
 
@@ -72,41 +68,57 @@ class HirondelleGui(GUIBase):
 
         # setting up the window
         self._mw = HirondelleWindow()
+        self._mw.centralwidget.hide()
+        self._mw.setDockNestingEnabled(True)
 
 
         # giving the plots names allows us to link their axes together
-        self._plot = self._mw.plotWidget
-        self._plot_item = self._plot.plotItem
+        self._spec = self._mw.spectrumPlot
+        self._spec_item = self._spec.plotItem
 
         # create a new ViewBox, link the right axis to its coordinate system
         self._right_axis = pg.ViewBox() # Create a ViewBox right axis
-        self._plot_item.showAxis('right') # Show the right axis of plotItem
-        self._plot_item.scene().addItem(self._right_axis) # associate the ViewBox right axis to the plotItem
-        self._plot_item.getAxis('right').linkToView(self._right_axis) # link this right axis to the ViewBox
-        self._right_axis.setXLink(self._plot_item) # link the ViewBox object to the plotItem x axis
+        self._spec_item.showAxis('right') # Show the right axis of plotItem
+        self._spec_item.scene().addItem(self._right_axis) # associate the ViewBox right axis to the plotItem
+        self._spec_item.getAxis('right').linkToView(self._right_axis) # link this right axis to the ViewBox
+        self._right_axis.setXLink(self._spec_item) # link the ViewBox object to the plotItem x axis
 
         # create a new ViewBox, link the top axis to its coordinate system (same procedure)
         self._top_axis = pg.ViewBox()
-        self._plot_item.showAxis('top')
-        self._plot_item.scene().addItem(self._top_axis)
-        self._plot_item.getAxis('top').linkToView(self._top_axis)
-        self._top_axis.setYLink(self._plot_item)
+        self._spec_item.showAxis('top')
+        self._spec_item.scene().addItem(self._top_axis)
+        self._spec_item.getAxis('top').linkToView(self._top_axis)
+        self._top_axis.setYLink(self._spec_item)
         self._top_axis.invertX(b=True) # We force the x axis to be rightward
 
         # label plot axis :
 
-        self._plot.setLabel('left', 'Fluorescence', units='counts/s')
-        self._plot.setLabel('right', 'Number of Points', units='#')
-        self._plot.setLabel('bottom', 'Wavelength', units='m')
-        self._plot.setLabel('top', 'Relative Frequency', units='Hz')
+        self._spec.setLabel('left', 'Fluorescence', units='counts/s')
+        self._spec.setLabel('right', 'Number of Points', units='#')
+        self._spec.setLabel('bottom', 'Wavelength', units='m')
+        self._spec.setLabel('top', 'Relative Frequency', units='Hz')
 
         # Create 2 empty plot curve to be filled later, set its pen (curve style)
-        self._curve1 = self._plot.plot()
+        self._curve1 = self._spec.plot()
         self._curve1.setPen(palette.c1, width=2)
 
-        # Connect signals
-        self._mw.runButton.clicked.connect(self.run_acquisition)
-        self._mw.stopButton.clicked.connect(self.stop_acquisition)
+        # Connect signals :
+        # Action (spectro):
+        self._mw.actionRun.triggered.connect(self.run_spectrum_acquisition)
+        self._mw.actionStop_Run.triggered.connect(self.stop_spectrum_acquisition)
+        # Button (image):
+        self._mw.runImageButton.clicked.connect(self.run_image_acquisition())
+        self._mw.stopImageButton.clicked.connect(self.stop_image_acquisition())
+
+        self.show()
+
+        self._save_PNG = True
+
+    def initialize_settings(self):
+
+        self._center_wavelength
+
+    def read_settings(self):
 
         self._center_wavelength = self._spectrum_logic.center_wavelength
         self._detector_offset = self._spectrum_logic.detector_offset
@@ -126,9 +138,6 @@ class HirondelleGui(GUIBase):
         self._mw.outputSlit.setCurrentIndex(self._output_slit)
         self._mw.outputSlitWidth.setValue(self._output_slit_width)
 
-        self.show()
-
-        self._save_PNG = True
 
     def update_settings(self):
 
@@ -161,17 +170,26 @@ class HirondelleGui(GUIBase):
         self._mw.activateWindow()
         self._mw.raise_()
 
-    def run_acquisition(self):
-        """Run the spectrum acquisition called from run_acquisition_Action
+    def run_spectrum_acquisition(self):
+        """Run the spectrum acquisition called from actionRun
         and plot the spectrum data obtained.
         """
         self.update_settings()
-        self._spectrum_logic.acquire_spectrum()
+        self._spectrum_logic.start_acquisition()
         data = self._spectrum_logic._spectrum_data
-        _wavelength_axis = np.linspace(self._min_wavelength,self._max_wavelength,len(self.data))
-        self._curve1.setData(_wavelength_axis,data)
+        wavelength = np.linspace(self._min_wavelength,self._max_wavelength,len(self.data))
+        self._curve1.setData(wavelength,data)
 
-    def stop_acquisition(self):
-        """Stop the spectrum acquisition called from run_acquisition_Action
+    def stop_spectrum_acquisition(self):
+        """Stop the spectrum acquisition called from actionStop_Run
         """
-        pass
+        self._spectrum_logic.stop_acquisition()
+
+    def run_image_acquisition(self):
+        """Run the image acquisition called from runImageButton
+        and plot the spectrum data obtained.
+        """
+        self.update_settings()
+        self._spectrum_logic.read_mode('IMAGE')
+        self._spectrum_logic.start_acquisition()
+        data = self._spectrum_logic._spectrum_data

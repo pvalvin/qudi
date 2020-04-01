@@ -95,7 +95,7 @@ class ShamrockLogic(GenericLogic):
     def spectrum_data(self):
         return self._spectrum_data
 
-    def acquire_spectrum(self):
+    def start_acquisition(self):
 
         if self.camera_device.start_single_acquisition():
             self._spectrum_data = self.camera_device.get_acquired_data()
@@ -104,6 +104,13 @@ class ShamrockLogic(GenericLogic):
         else:
             self.log.info('Single spectrum acquisition aborted ')
             return 0
+
+    def stop_acquisition(self):
+
+        if self.camera_device.stop_acquisition():
+            self.log.info('Acquisition aborted with success ')
+        else:
+            self.log.error('Acquisition can\'t be aborted : try again or disconnect the device ')
 
 
     ##############################################################################
@@ -115,7 +122,7 @@ class ShamrockLogic(GenericLogic):
         return self.spectrometer_device.get_grating()
 
     @grating.setter
-    def grating(self,grating_number):
+    def grating(self, grating_number):
         parameter_correct = (type(grating_number) is int and 0<grating_number<4)
         if parameter_correct and grating_number != self._grating:
             self.spectrometer_device.set_grating(grating_number)
@@ -237,3 +244,12 @@ class ShamrockLogic(GenericLogic):
                 self.log.debug('Slit width parameter is not correct : it must be positive ')
             else:
                 self.log.debug('Slit width parameter is equal to the current output slit width ')
+
+
+    @property
+    def read_mode(self):#TODO : rajouter le getter readMode
+        pass
+
+    @read_mode.setter
+    def read_mode(self, mode):
+        self.camera_device._set_read_mode(mode)
