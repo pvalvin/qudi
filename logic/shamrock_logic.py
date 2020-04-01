@@ -142,7 +142,7 @@ class ShamrockLogic(GenericLogic):
     def center_wavelength(self, wavelength):
         parameter_correct = type(wavelength) is (float or int)
         if parameter_correct and wavelength != self._center_wavelength:
-            self.spectrometer_device.set_wavelength(float(wavelength))
+            self.spectrometer_device.set_wavelength(int(wavelength))
             self.log.info('Central wavelength has been changed correctly ')
             self._center_wavelength = wavelength
         else:
@@ -174,13 +174,13 @@ class ShamrockLogic(GenericLogic):
 
     @property
     def input_slit(self):
-        return self.spectrometer_device.get_flipper_mirror_position(0)
+        return self.spectrometer_device.get_input_port()
 
     @input_slit.setter
     def input_slit(self, position):
         parameter_correct = type(position) is int
         if parameter_correct and position != self._input_slit and -1<position<2:
-            self.spectrometer_device.set_flipper_mirror_position(0,position)
+            self.spectrometer_device.set_input_port(position)
             self.log.info('Input slit has been selected correctly ')
             self._input_slit = position
         else:
@@ -191,13 +191,13 @@ class ShamrockLogic(GenericLogic):
 
     @property
     def output_slit(self):
-        return self.spectrometer_device.get_flipper_mirror_position(1)
+        return self.spectrometer_device.get_output_port()
 
     @output_slit.setter
     def output_slit(self, position):
         parameter_correct = type(position) is int
-        if parameter_correct and position != self._output_slit and -1<position<2:
-            self.spectrometer_device.set_flipper_mirror_position(1,position)
+        if parameter_correct and position != self._output_slit and -1 < position < 2:
+            self.spectrometer_device.set_output_port(position)
             self.log.info('Output slit has been selected correctly ')
             self._output_slit = position
         else:
@@ -246,10 +246,5 @@ class ShamrockLogic(GenericLogic):
                 self.log.debug('Slit width parameter is equal to the current output slit width ')
 
 
-    @property
-    def read_mode(self):#TODO : rajouter le getter readMode
-        pass
-
-    @read_mode.setter
-    def read_mode(self, mode):
-        self.camera_device._set_read_mode(mode)
+    def set_read_mode(self, mode):
+        self.camera_device.set_read_mode(mode)

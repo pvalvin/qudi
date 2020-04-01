@@ -107,8 +107,8 @@ class HirondelleGui(GUIBase):
         self._mw.actionRun.triggered.connect(self.run_spectrum_acquisition)
         self._mw.actionStop_Run.triggered.connect(self.stop_spectrum_acquisition)
         # Button (image):
-        self._mw.runImageButton.clicked.connect(self.run_image_acquisition())
-        self._mw.stopImageButton.clicked.connect(self.stop_image_acquisition())
+        #self._mw.runImageButton.clicked.connect(self.run_image_acquisition())
+        #self._mw.stopImageButton.clicked.connect(self.stop_image_acquisition())
 
         self.show()
 
@@ -132,7 +132,7 @@ class HirondelleGui(GUIBase):
         self._mw.inputSlitCombo.setCurrentIndex(self._input_slit)
         self._mw.inputSlitWidthDSpin.setValue(self._input_slit_width)
         self._mw.outputSlitCombo.setCurrentIndex(self._output_slit)
-        self._mw.outputSlitWidthDSpin.setValue(self._output_slit_width)
+        self._mw.outputSlitWidthDSPin.setValue(self._output_slit_width)
 
 
     def update_settings(self):
@@ -143,7 +143,7 @@ class HirondelleGui(GUIBase):
         self._input_slit = self._mw.inputSlitCombo.currentIndex()
         self._input_slit_width = self._mw.inputSlitWidthDSpin.value()
         self._output_slit = self._mw.outputSlitCombo.currentIndex()
-        self._output_slit_width = self._mw.outputSlitWidthDSpin.value()
+        self._output_slit_width = self._mw.outputSlitWidthDSPin.value()
 
         self._spectrum_logic.center_wavelength = self._center_wavelength
         self._spectrum_logic.detector_offset = self._detector_offset
@@ -172,20 +172,20 @@ class HirondelleGui(GUIBase):
         """
         self.update_settings()
         self._spectrum_logic.start_acquisition()
-        data = self._spectrum_logic._spectrum_data
-        wavelength = np.linspace(self._min_wavelength,self._max_wavelength,len(self.data))
-        self._curve1.setData(wavelength,data)
+        data = self._spectrum_logic.spectrum_data
+        wavelength = np.linspace(0, 1, len(data))
+        self._curve1.setData(wavelength, data[:, 0])
 
     def stop_spectrum_acquisition(self):
         """Stop the spectrum acquisition called from actionStop_Run
         """
         self._spectrum_logic.stop_acquisition()
 
-    def run_image_acquisition(self):
+    #def run_image_acquisition(self):
         """Run the image acquisition called from runImageButton
         and plot the spectrum data obtained.
         """
-        self.update_settings()
-        self._spectrum_logic.read_mode('IMAGE')
-        self._spectrum_logic.start_acquisition()
-        data = self._spectrum_logic._spectrum_data
+     #   self.update_settings()
+     #   self._spectrum_logic.set_read_mode(str('IMAGE'))
+     #   self._spectrum_logic.start_acquisition()
+     #   data = self._spectrum_logic._spectrum_data

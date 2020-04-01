@@ -190,7 +190,7 @@ class Shamrock(Base,SpectrometerInterface):
         """
         if type(grating) is int:
             if type(offset) is int:
-                self.check(self.dll.ShamrockSetGratingOffset(self._deviceID, grating, offset))
+                self.check(self.dll.ShamrockSetGratingOffset(self.deviceIDID, grating, offset))
             else:
                 self.log.debug('set_grating_offset function "offset" parameter needs to be int type')
         else:
@@ -224,7 +224,7 @@ class Shamrock(Base,SpectrometerInterface):
         """
         wavelength_min = ct.c_float()
         wavelength_max = ct.c_float()
-        error = self.dll.ShamrockGetWavelengthLimits(self._device, grating, ct.byref(wavelength_min)
+        error = self.dll.ShamrockGetWavelengthLimits(self.deviceID, grating, ct.byref(wavelength_min)
                                                      , ct.byref(wavelength_max))
         self.error_message(error, "GetWavelengthLimits")
         return wavelength_min.value, wavelength_max.value
@@ -252,27 +252,27 @@ class Shamrock(Base,SpectrometerInterface):
     
     def set_pixel_width(self, width):
         if type(width) is float :
-            error = self.dll.ShamrockSetPixelWidth(self._device, width)
+            error = self.dll.ShamrockSetPixelWidth(self.deviceID, width)
             return self.error_message(error, "SetPixelWidth")
         else:
             self.log.debug('set_pixel_width function "width" parameter needs to be int type')
 
     def get_pixel_width(self):
         width = ct.c_float()
-        error = self.dll.ShamrockGetPixelWidth(self._device, ct.byref(width))
+        error = self.dll.ShamrockGetPixelWidth(self.deviceID, ct.byref(width))
         self.error_message(error, "ShamrockGetPixelWidth")
         return width.value
 
     def set_number_pixel(self, pixel_number):
         if type(pixel_number) is int :
-            error = self.dll.ShamrockSetNumberPixels(self._device, pixel_number)
+            error = self.dll.ShamrockSetNumberPixels(self.deviceID, pixel_number)
             return self.error_message(error, "SetNumberPixels")
         else:
             self.log.debug('set_pixel_width function "width" parameter needs to be int type')
 
     def get_number_pixel(self):
         pixel_number = ct.c_int()
-        error = self.dll.ShamrockGetNumberPixels(self._device, ct.byref(pixel_number))
+        error = self.dll.ShamrockGetNumberPixels(self.deviceID, ct.byref(pixel_number))
         self.error_message(error, "ShamrockGetNumberPixels")
         return pixel_number.value
      
@@ -280,13 +280,13 @@ class Shamrock(Base,SpectrometerInterface):
     
     def get_detector_offset(self):
         offset = ct.c_int()
-        error = self.dll.ShamrockGetDetectorOffset(self._device, ct.byref(offset))
+        error = self.dll.ShamrockGetDetectorOffset(self.deviceID, ct.byref(offset))
         self.error_message(error, "GetDetectorOffset")
         return offset.value
 
     def set_detector_offset(self, offset):
         if type(offset) is int :
-            error = self.dll.ShamrockSetDetectorOffset(self._device, offset)
+            error = self.dll.ShamrockSetDetectorOffset(self.deviceID, offset)
             return self.error_message(error, "SetDetectorOffset")
         else :
             self.log.debug('set_detector_offset function "offset" parameter needs to be int type')
@@ -296,7 +296,7 @@ class Shamrock(Base,SpectrometerInterface):
     def get_calibration(self, number_pixels):
         if type(number_pixels) is int :
             value = ct.c_float()
-            error = self.dll.ShamrockGetCalibration(self._device, ct.byref(value), number_pixels)
+            error = self.dll.ShamrockGetCalibration(self.deviceID, ct.byref(value), number_pixels)
             self.error_message(error, "GetCalibration")
             return value.value
         else:

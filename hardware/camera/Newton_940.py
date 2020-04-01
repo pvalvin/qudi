@@ -152,7 +152,7 @@ class Newton940(Base, CameraInterface):
         nx_px, ny_px = c_int(), c_int()
         self._get_detector(nx_px, ny_px)
         self._width, self._height = nx_px.value, ny_px.value
-        self._set_read_mode(self._read_mode)
+        self.set_read_mode(self._read_mode)
         self._set_trigger_mode(self._trigger_mode)
         self._set_exposuretime(self._exposure)
         self._set_acquisition_mode(self._acquisition_mode)
@@ -263,7 +263,7 @@ class Newton940(Base, CameraInterface):
     #                            Read Mode functions
     ##############################################################################
 
-    def _set_read_mode(self, mode):
+    def set_read_mode(self, mode):
         """
         @param string mode: string corresponding to certain ReadMode
         @return string answer from the camera
