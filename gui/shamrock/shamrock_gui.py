@@ -114,10 +114,6 @@ class HirondelleGui(GUIBase):
 
         self._save_PNG = True
 
-    def initialize_settings(self):
-
-        self._center_wavelength
-
     def read_settings(self):
 
         self._center_wavelength = self._spectrum_logic.center_wavelength
@@ -130,24 +126,24 @@ class HirondelleGui(GUIBase):
         self._min_wavelength, self._max_wavelength = self._spectrum_logic.wavelength_limits
 
         # Initialize widgets slots :
-        self._mw.centerWavelength.setValue(self._center_wavelength)
-        self._mw.detectorOffset.setValue(self._detector_offset)
-        self._mw.gratingNum.setCurrentIndex(self._grating)
-        self._mw.inputSlit.setCurrentIndex(self._input_slit)
-        self._mw.inputSlitWidth.setValue(self._input_slit_width)
-        self._mw.outputSlit.setCurrentIndex(self._output_slit)
-        self._mw.outputSlitWidth.setValue(self._output_slit_width)
+        self._mw.wavelengthDSpin.setValue(self._center_wavelength)
+        self._mw.detectorOffsetSpin.setValue(self._detector_offset)
+        self._mw.gratingNumCombo.setCurrentIndex(self._grating)
+        self._mw.inputSlitCombo.setCurrentIndex(self._input_slit)
+        self._mw.inputSlitWidthDSpin.setValue(self._input_slit_width)
+        self._mw.outputSlitCombo.setCurrentIndex(self._output_slit)
+        self._mw.outputSlitWidthDSpin.setValue(self._output_slit_width)
 
 
     def update_settings(self):
 
-        self._center_wavelength = self._mw.centerWavelength.value()
-        self._detector_offset = self._mw.detectorOffset.value()
-        self._grating = self._mw.gratingNum.currentIndex()
-        self._input_slit = self._mw.inputSlit.currentIndex()
-        self._input_slit_width = self._mw.inputSlitWidth.value()
-        self._output_slit = self._mw.outputSlit.currentIndex()
-        self._output_slit_width = self._mw.outputSlitWidth.value()
+        self._center_wavelength = self._mw.wavelengthDSpin.value()
+        self._detector_offset = self._mw.detectorOffsetSpin.value()
+        self._grating = self._mw.gratingNumCombo.currentIndex()
+        self._input_slit = self._mw.inputSlitCombo.currentIndex()
+        self._input_slit_width = self._mw.inputSlitWidthDSpin.value()
+        self._output_slit = self._mw.outputSlitCombo.currentIndex()
+        self._output_slit_width = self._mw.outputSlitWidthDSpin.value()
 
         self._spectrum_logic.center_wavelength = self._center_wavelength
         self._spectrum_logic.detector_offset = self._detector_offset

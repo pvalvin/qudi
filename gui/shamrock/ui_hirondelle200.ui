@@ -231,7 +231,7 @@
          <widget class="QSpinBox" name="detectorOffsetSpin"/>
         </item>
         <item>
-         <widget class="QDoubleSpinBox" name="wavlengthDSpin">
+         <widget class="QDoubleSpinBox" name="wavelengthDSpin">
           <property name="wrapping">
            <bool>false</bool>
           </property>
