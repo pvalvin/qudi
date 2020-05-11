@@ -31,7 +31,7 @@ import ctypes as ct
 from core.module import Base
 from core.configoption import ConfigOption
 
-from interface.science_camera_interface import SpectroscopyCameraInterface
+from interface.science_camera_interface import ScienceCameraInterface
 from interface.science_camera_interface import ReadMode, Constraints, ImageAdvancedParameters, ShutterState
 
 
@@ -104,7 +104,7 @@ ERROR_DICT = {
 }
 
 
-class Main(Base, SpectroscopyCameraInterface):
+class Main(Base, ScienceCameraInterface):
     """ Hardware class for Andor CCD spectroscopy cameras
 
     Tested with :
@@ -649,7 +649,7 @@ class Main(Base, SpectroscopyCameraInterface):
         number = ct.c_int()
         self._dll.GetNumberPreAmpGains(ct.byref(number))
         gains = []
-        for i in range(number):
+        for i in range(number.value):
             gain = ct.c_float()
             self._check(self._dll.GetPreAmpGain(i, ct.byref(gain)))
             gains.append(gain.value)
