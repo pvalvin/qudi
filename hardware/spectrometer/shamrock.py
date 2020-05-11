@@ -53,6 +53,11 @@ class Shamrock(Base, GratingSpectrometerInterface):
 
     Tested with :
     - Shamrock 500
+
+    Example config for copy-paste:
+
+    shamrock:
+        module.Class: 'spectrometer.shamrock.Shamrock'
     """
 
     _dll_location = ConfigOption('dll_location', missing='error')
@@ -62,7 +67,8 @@ class Shamrock(Base, GratingSpectrometerInterface):
     SLIT_MAX_WIDTH = 2500e-6  # todo: same
 
     # Declarations of attributes to make Pycharm happy
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._constraints = None
         self._dll = None
         self._shutter_status = None

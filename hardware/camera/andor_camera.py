@@ -109,6 +109,15 @@ class Main(Base, SpectroscopyCameraInterface):
 
     Tested with :
      - Newton 940
+
+    Example config for copy-paste:
+
+    andor_camera:
+        module.Class: 'camera.andor_camera.Main'
+        dll_location: 'C:\\camera\\andor.dll' # path to library file
+        default_trigger_mode: 'INTERNAL'
+        shutter_TTL: 1
+        shutter_switching_time: 100e-3
     """
     _dll_location = ConfigOption('dll_location', missing='error')
 
@@ -126,8 +135,8 @@ class Main(Base, SpectroscopyCameraInterface):
     _shutter_switching_time = ConfigOption('shutter_switching_time', 100e-3)
 
     # Declarations of attributes to make Pycharm happy
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._constraints = None
         self._dll = None
         self._active_tracks = None

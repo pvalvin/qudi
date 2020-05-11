@@ -28,10 +28,12 @@ from qtpy import QtCore
 
 
 class Main(Base, ScienceCameraInterface):
-    """ This module is the dummy module for the SpectroscopyCameraInterface interface
+    """ This module is the dummy module for the ScienceCameraInterface interface
 
-    spectroscopy_camera_dummy:
-        module.Class: 'spectroscopy_camera_dummy.Main'
+    Example config for copy-paste:
+
+    science_camera_dummy:
+        module.Class: 'dummies.science_camera_dummy.Main'
     """
 
     def on_activate(self):
@@ -298,18 +300,16 @@ class Main(Base, ScienceCameraInterface):
     #                           Trigger mode functions
     ##############################################################################
     def get_trigger_mode(self):
-        """ Getter method returning the current trigger mode used by the camera.
+        """ Getter method returning the shutter state.
 
-        @return (str): Trigger mode
-
-        This string should match one in the constraints trigger_modes list.
+        @return (ShutterState): The current shutter state
         """
         return self._trigger_mode
 
     def set_trigger_mode(self, value):
-        """ Setter method for the trigger mode used by the camera.
+        """ Setter method setting the shutter state.
 
-        @param (str) value: trigger mode, should match one in the constraints trigger_modes list.
+        @param (ShutterState) value: the shutter state to set
         """
         if value in self.get_constraints().trigger_modes:
             self._trigger_mode = value
@@ -319,14 +319,14 @@ class Main(Base, ScienceCameraInterface):
     #
     # Method used only if constraints.has_shutter
     ##############################################################################
-    def get_shutter_open_state(self):
+    def get_shutter_state(self):
         """ Getter method returning the shutter mode.
 
         @return (bool): True if the shutter is open, False of closed
         """
         return self._shutter_open_state
 
-    def set_shutter_open_state(self, value):
+    def set_shutter_state(self, value):
         """ Setter method setting the shutter mode.
 
         @param (bool) value: True to open, False tp close

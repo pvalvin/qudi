@@ -24,16 +24,22 @@ import numpy as np
 from core.module import Base
 from core.configoption import ConfigOption
 
-from interface.grating_spectrometer_interface import SpectrometerInterface
+from interface.grating_spectrometer_interface import GratingSpectrometerInterface
 from interface.grating_spectrometer_interface import Grating, PortType, Port, Constraints
 
 
 class Main(Base, GratingSpectrometerInterface):
     """ Hardware module that interface a dummy grating spectrometer
+
+        Example config for copy-paste:
+
+    grating_spectrometer_dummy:
+        module.Class: 'dummies.grating_spectrometer.Main'
     """
 
     # Declarations of attributes to make Pycharm happy
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._constraints = None
         self._dll = None
         self._shutter_status = None
