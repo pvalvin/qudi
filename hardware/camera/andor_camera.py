@@ -180,8 +180,8 @@ class Main(Base, ScienceCameraInterface):
         """ De-initialisation performed during deactivation of the module. """
         if self.module_state() == 'locked':
             self.stop_acquisition()
-        if self._close_shutter_on_deactivate:
-            self.set_shutter_open_state(False)
+        # if self._close_shutter_on_deactivate:
+        #     self.set_shutter_open_state(False)
         try:
             self._dll.ShutDown()
         except:
@@ -211,7 +211,7 @@ class Main(Base, ScienceCameraInterface):
          """
         constraints = Constraints()
         constraints.name = self._get_name()
-        constraints.width, constraints.width = self._get_image_size()
+        constraints.width, constraints.height = self._get_image_size()
         constraints.pixel_size_width, constraints.pixel_size_width = self._get_pixel_size()
         constraints.internal_gains = self._get_available_gains()
         constraints.readout_speeds = self._get_available_speeds()
@@ -570,7 +570,7 @@ class Main(Base, ScienceCameraInterface):
         """
         temperature = ct.c_float()
         self._dll.GetTemperatureF(ct.byref(temperature))
-        return temp.value + 273.15
+        return temperature.value + 273.15
 
     def get_temperature_setpoint(self):
         """ Getter method for the temperature setpoint of the camera.
@@ -588,7 +588,7 @@ class Main(Base, ScienceCameraInterface):
         if not(constraints.min < value < constraints.max):
             self.log.error('Temperature {} K is not in the validity range.'.format(value))
             return
-        temperature = int(round(value + 273.15))
+        temperature = int(round(value - 273.15))
         status_code = self._check(self._dll.SetTemperature(temperature))
         if status_code == OK_CODE:
             self._temperature_setpoint = temperature + 273.15
@@ -638,7 +638,7 @@ class Main(Base, ScienceCameraInterface):
         @return tuple(float, float): The minimum minimum and maximum allowed for the setpoint in K """
         mini = ct.c_int()
         maxi = ct.c_int()
-        self._check(self._dll.GetPixelSize(ct.byref(mini), ct.byref(maxi)))
+        self._check(self._dll.GetTemperatureRange(ct.byref(mini), ct.byref(maxi)))
         return mini.value+273.15, maxi.value+273.15
 
     def _get_available_gains(self):
@@ -661,11 +661,11 @@ class Main(Base, ScienceCameraInterface):
         @return (list(float)): A list of the readout speeds supported by the camera
         """
         number = ct.c_int()
-        self._dll.GetNumberHSSpeeds(0, ct.byref(number))  # Amplification: 0 = electron multiplication, 1 = conventional
+        self._dll.GetNumberHSSpeeds(0, 0, ct.byref(number))  # Amplification: 0 = electron multiplication, 1 = conventional
         speeds = []
-        for i in range(number):
+        for i in range(number.value):
             speed = ct.c_float()
-            self._check(self._dll.GetHSSpeed(0, 0, i, ct.byref(gain)))  # AD Channel index, Amplification
+            self._check(self._dll.GetHSSpeed(0, 0, i, ct.byref(speed)))  # AD Channel index, Amplification
             speeds.append(speed.value * 1e6)  # DLL talks in MHz
         return speeds
 

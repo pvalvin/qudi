@@ -54,17 +54,17 @@ class ShutterState(Enum):
 class Constraints:
     """ Class defining formally the hardware constraints """
     def __init__(self):
-        self.name = '',                  # Camera manufacture name (ex : 'Newton940')
-        self.width = None,               # Camera width in pixels
-        self.height = None,              # Camera height in pixels
-        self.pixel_size_width = None,    # Physical width of the pixels in meter
+        self.name = ''                  # Camera manufacture name (ex : 'Newton940')
+        self.width = None               # Camera width in pixels
+        self.height = None              # Camera height in pixels
+        self.pixel_size_width = None    # Physical width of the pixels in meter
         self.pixel_size_height = None    # Physical height of the pixels in meter
-        self.read_modes = [],            # Read mode supported by the camera (see ReadMode class)
-        self.internal_gains = [],        # Internal gains supported by the camera (list of float)
-        self.readout_speeds = [],        # Readout speed supported by the camera, in Hz (list of float)
-        self.has_shutter = False,        # Tells if the camera has a shutter
-        self.trigger_modes = [],         # User defined trigger mode (list of string)
-        self.has_cooler = False,         # Tells if the camera has a cooling system
+        self.read_modes = []            # Read mode supported by the camera (see ReadMode class)
+        self.internal_gains = []        # Internal gains supported by the camera (list of float)
+        self.readout_speeds = []        # Readout speed supported by the camera, in Hz (list of float)
+        self.has_shutter = False        # Tells if the camera has a shutter
+        self.trigger_modes = []         # User defined trigger mode (list of string)
+        self.has_cooler = False         # Tells if the camera has a cooling system
         self.temperature = ScalarConstraint(unit='K')     # Temperature limits in kelvin
 
 
