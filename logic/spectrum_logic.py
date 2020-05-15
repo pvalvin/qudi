@@ -78,7 +78,7 @@ class SpectrumLogic(GenericLogic):
     _number_of_scan = StatusVar('number_of_scan', 1)
     _number_accumulated_scan = StatusVar('number_accumulated_scan', 1)
     _acquisition_mode = StatusVar('acquisition_mode', 'SINGLE_SCAN')
-    _temperature_setpoint = StatusVar('temperature_setpoint', 275)
+    _temperature_setpoint = StatusVar('temperature_setpoint', None)
 
     # cosmic rejection coeff :
     _coeff_rej_cosmic = StatusVar('coeff_cosmic_rejection', 2.2)
@@ -172,6 +172,8 @@ class SpectrumLogic(GenericLogic):
             self._shutter_state = self.camera().get_shutter_mode()
 
         # temperature setpoint :
+        if self._temperature_setpoint == None:
+            self._temperature_setpoint = self.camera().get_temperature_setpoint()
         if self.camera_constraints.has_cooler:
             self.camera().set_temperature_setpoint(self._temperature_setpoint)
 
@@ -364,9 +366,10 @@ class SpectrumLogic(GenericLogic):
         grating_number = int(grating_index)
         if grating_index == self._grating_index:
             return
-        if not 0 < grating_index < len(self.spectro_constraints.gratings):
+        number_of_gratings = len(self.spectro_constraints.gratings)
+        if not 0 <= grating_index < number_of_gratings:
             self.log.error('Grating number parameter is not correct : it must be in range 0 to {} '
-                           .format(self.spectro_constraints['number_of_gratings'] - 1))
+                           .format(number_of_gratings - 1))
             return
         self.spectrometer().set_grating_index(grating_index)
         self._grating_index = self.spectrometer().get_grating_index()
@@ -488,7 +491,7 @@ class SpectrumLogic(GenericLogic):
         if not np.any([input_port==port.type for port in self._input_ports]):
             self.log.error('Function parameter must be an INPUT value from the input ports of the camera ')
             return
-        if input_port == self._input_port.type:
+        if input_port == self._input_port:
             return
         self.spectrometer().set_input_port(input_port)
         self._input_port = self.spectrometer().get_input_port()
@@ -526,7 +529,7 @@ class SpectrumLogic(GenericLogic):
         if not np.any([output_port==port.type for port in self._output_ports]):
             self.log.error('Function parameter must be an OUTPUT value from the output ports of the camera ')
             return
-        if output_port == self._output_port.type:
+        if output_port == self._output_port:
             return
         self.spectrometer().set_output_port(output_port)
         self._output_port = self.spectrometer().get_output_port()
@@ -538,8 +541,7 @@ class SpectrumLogic(GenericLogic):
         @param slit_width: (Port|str) port
         @return: (float) input port slit width
 
-        Tested : yes
-        SI check : yes
+
         """
         if isinstance(port, PortType):
             port = port.name
@@ -563,8 +565,7 @@ class SpectrumLogic(GenericLogic):
         @param slit_width: (float) input port slit width
         @return: nothing
 
-        Tested : yes
-        SI check : yes
+
         """
         if self.module_state() == 'locked':
             self.log.error("Acquisition process is currently running : you can't change this parameter"
@@ -697,8 +698,6 @@ class SpectrumLogic(GenericLogic):
 
         @param read_mode: (str|ReadMode) read mode
 
-        Tested : yes
-        SI check : yes
         """
         if self.module_state() == 'locked':
             self.log.error("Acquisition process is currently running : you can't change this parameter"
