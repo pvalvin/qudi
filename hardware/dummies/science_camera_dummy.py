@@ -194,7 +194,7 @@ class Main(Base, ScienceCameraInterface):
 
         This value is one of the possible values given by constraints
         """
-        return self._readout_seed
+        return self._readout_speed
 
     def set_readout_speed(self, value):
         """ Set the readout speed of the camera
