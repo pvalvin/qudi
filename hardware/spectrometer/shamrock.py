@@ -485,7 +485,7 @@ class Shamrock(Base, GratingSpectrometerInterface):
     def _set_pixel_width(self, value):
         """ Internal function to set the pixel width along the dispersion axis
 
-        @param (float) value: The pixel width of the detector
+        @param (float) value: The pixel width of the detector in meter
 
         Shamrock DLL can give a estimate of the calibration if the required parameters are given.
         This feature is not used by Qudi but is useful to check everything is ok.
