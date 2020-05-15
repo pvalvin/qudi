@@ -55,7 +55,6 @@ class AcquisitionMode(Enum):
     LIVE_SCAN = 2
     ACC_SINGLE_SCAN = 3
     ACC_MULTI_SCAN = 4
-    ACC_LIVE_SCAN = 5
 
 class SpectrumLogic(GenericLogic):
     """This logic module gathers data from the spectrometer.
@@ -80,7 +79,6 @@ class SpectrumLogic(GenericLogic):
     _scan_delay = StatusVar('scan_delay', 1)
     _number_of_scan = StatusVar('number_of_scan', 1)
     _number_accumulated_scan = StatusVar('number_accumulated_scan', 1)
-
     _acquisition_mode = StatusVar('acquisition_mode', 'SINGLE_SCAN')
 
     # cosmic rejection coeff :
@@ -101,6 +99,8 @@ class SpectrumLogic(GenericLogic):
     def on_activate(self):
         """ Initialisation performed during activation of the module.
         """
+
+        # save logic module :
         self._save_logic = self.savelogic()
 
         # hardware constraints :
@@ -130,15 +130,11 @@ class SpectrumLogic(GenericLogic):
             self._output_port = self.spectrometer().get_output_port()
 
         # Slit width config :
-        if not self._input_port.is_motorized:
-            self._input_slit_width = None
-        else:
-            self._input_slit_width = self.spectrometer().get_input_slit_width()
+        self._input_slit_width = [self.spectrometer().get_slit_width(port) if port.is_motorized else None
+                                  for port in self._input_ports]
 
-        if not self._output_port.is_motorized:
-            self._output_slit_width = None
-        else:
-            self._output_slit_width = self.spectrometer().get_output_slit_width()
+        self._output_slit_width = [self.spectrometer().get_slit_width(port) if port.is_motorized else None
+                                   for port in self._output_ports]
 
         # read mode :
         self._read_mode = self.camera().get_read_mode()
@@ -172,9 +168,9 @@ class SpectrumLogic(GenericLogic):
         self._temperature_setpoint = self.camera().get_temperature_setpoint()
 
         # QTimer for asynchronous execution :
-        self._timer = QtCore.QTimer()
-        self._timer.setSingleShot(True)
-        self._timer.timeout.connect(self.loop_acquisition)
+        self._loop_timer = QtCore.QTimer()
+        self._loop_timer.setSingleShot(True)
+        self._loop_timer.timeout.connect(self.loop_acquisition)
         self._loop_counter = 0
 
     def on_deactivate(self):
@@ -196,13 +192,13 @@ class SpectrumLogic(GenericLogic):
                            ": module state is currently locked. ")
             return
         self.module_state.lock()
-        if self._acquisition_mode == "SINGLE_SCAN":
+        if self._acquisition_mode == 'SINGLE_SCAN':
             self.camera().start_acquisition()
             self.module_state.unlock()
             self._acquired_data = self.get_acquired_data()
             self.log.info("Acquisition finished : module state is 'idle' ")
             return
-        self._loop_counter = 0
+        self._loop_counter = self.number_of_loop
         self.loop_acquisition()
 
     def loop_acquisition(self):
@@ -214,29 +210,34 @@ class SpectrumLogic(GenericLogic):
         SI check : yes
         """
         self.camera().start_acquisition()
-        # Get acquired data : new scan if 'LIVE' or concatenate scan if 'MULTI'
-        if self._acquisition_mode[-4:] == 'LIVE':
+        self.number_of_loop -= 1
+
+        # Get acquired data : update scan if 'LIVE' or concatenate scan if 'MULTI'
+        if self._acquisition_mode == 'LIVE_SCAN' or self._loop_counter == self.number_of_loop-1:
             self._acquired_data = self.get_acquired_data()
         else:
             self._acquired_data = np.append(self._acquired_data, self.get_acquired_data())
-        # If 'MULTI' stop acquisition after number_of_scan*number_accumulation loop
-        if self._acquisition_mode[-10:-5] == 'MULTI' and self._loop_counter%self._number_of_scan == 0\
-                and self._loop_counter!=0:
-            self._timer.stop()
-            self.module_state.unlock()
-            self.log.info("Loop acquisition finished : module state is 'idle' ")
-            return
-        else:
-            delay_time = self._scan_delay
+
         # Accumulation mode starting with 'ACC' : if accumulation finished apply cosmic rejection from this last data
         if self._acquisition_mode[:3] == 'ACC':
-            if self._loop_counter%self._number_accumulated_scan == 0 and self._loop_counter!=0:
+            if self._loop_counter%self._number_accumulated_scan == 0 and self._loop_counter!=self.number_of_loop:
                 data = self._acquired_data[-self._number_accumulated_scan]
+                filtered_data = self.reject_cosmic(data)
                 np.delete(self._acquired_data, np.s_[-self._number_accumulated_scan], axis=0)
-                self._acquired_data = np.append(self._acquired_data, self.reject_cosmic(data))
+                self._acquired_data = np.append(self._acquired_data, filtered_data)
                 delay_time = self._scan_delay
             else:
                 delay_time = self._accumulation_delay
+        else:
+            delay_time = self._accumulation_delay
+
+        # Stop acquisition if not live acquistion
+        if self._acquisition_mode[-9:] != 'LIVE_SCAN' and self._loop_counter==0:
+            self.module_state.unlock()
+            self._acquired_data = self.get_acquired_data()
+            self.log.info("Acquisition finished : module state is 'idle' ")
+            return
+
         # Callback the loop function after delay time
         self._timer.start(delay_time)
 
@@ -282,6 +283,17 @@ class SpectrumLogic(GenericLogic):
         self.camera().stop_acquisition()
         self.module_state.unlock()
         self.log.info("Acquisition stopped : module state is 'idle' ")
+
+    @property
+    def number_of_loop(self):
+        """This function calculate the number of loop to do by the acquisition
+        """
+        number_of_loop = 1
+        if self._acquisition_mode[-10:] == 'MULTI_SCAN':
+            number_of_loop *= self._number_of_scan
+        elif self._acquisition_mode[:3] == 'ACC':
+            number_of_loop *= self._number_accumulated_scan
+        return number_of_loop
 
     @property
     def acquired_data(self):
@@ -444,7 +456,7 @@ class SpectrumLogic(GenericLogic):
         Tested : yes
         SI check : yes
         """
-        return self._input_port
+        return self._input_port.name
 
     @input_port.setter
     def input_port(self, input_port):
@@ -480,7 +492,7 @@ class SpectrumLogic(GenericLogic):
         Tested : yes
         SI check : yes
         """
-        return self._output_port
+        return self._output_port.name
 
     @output_port.setter
     def output_port(self, output_port):
@@ -508,20 +520,34 @@ class SpectrumLogic(GenericLogic):
         self._output_port = self.spectrometer().get_output_port()
 
     @property
-    def input_slit_width(self):
+    def input_slit_width(self, port='current'):
         """Getter method returning the active input port slit width of the spectrometer.
 
+        @param slit_width: (Port|str) port
         @return: (float) input port slit width
 
         Tested : yes
         SI check : yes
         """
-        return self._input_slit_width
+        if isinstance(port, PortType):
+            port = port.name
+        port = str(port)
+        if port == 'current':
+            index = self._input_ports.index(self._input_port)
+        elif port == 'front':
+            index = self._input_ports.index(PortType.INPUT_FRONT)
+        elif port == 'side':
+            index = self._input_ports.index(PortType.INPUT_SIDE)
+        else:
+            self.log.error("Port parameter do not match with the possible values : 'current', 'front' and 'side' ")
+            return
+        return self._input_slit_width[index]
 
     @input_slit_width.setter
-    def input_slit_width(self, slit_width):
+    def input_slit_width(self, slit_width, port='current'):
         """Setter method setting the active input port slit width of the spectrometer.
 
+        @param slit_width: (Port|str) port
         @param slit_width: (float) input port slit width
         @return: nothing
 
@@ -532,31 +558,55 @@ class SpectrumLogic(GenericLogic):
             self.log.error("Acquisition process is currently running : you can't change this parameter"
                            " until the acquisition is completely stopped ")
             return
-        if not self._input_port.is_motorized:
-            self.log.error('Input port has no motorized slit : this slit width can\'t be changed and'
-                           ' its value is NONE ')
-            return
-        if self._input_slit_width == slit_width:
-            return
+        if isinstance(port, PortType):
+            port = port.name
+        port = str(port)
         slit_width = float(slit_width)
-        self.spectrometer().set_slit_width(self._input_port.type, slit_width)
-        self._input_slit_width = self.spectrometer().get_slit_width(self._input_port.type)
+        if port == 'current':
+            port = self._input_port
+        elif port == 'front':
+            port = PortType.INPUT_FRONT
+        elif port == 'side':
+            port = PortType.INPUT_SIDE
+        else:
+            self.log.error("Port parameter do not match with the possible values : 'current', 'front' and 'side' ")
+            return
+        if port not in self._input_ports:
+            self.log.error('Input port {} doesn\'t exist on your hardware '.format(port.name))
+            return
+        index = self._input_ports.index(port)
+        if self._input_slit_width[index] == slit_width:
+            return
+        self.spectrometer().set_slit_width(port, slit_width)
+        self._input_slit_width[index] = self.spectrometer().get_slit_width(port)
 
     @property
-    def output_slit_width(self):
+    def output_slit_width(self, port='current'):
         """Getter method returning the active output port slit width of the spectrometer.
 
+        @param slit_width: (Port|str) port
         @return: (float) output port slit width
 
         Tested : yes
         SI check : yes
         """
+        port = str(port)
+        if port == 'current':
+            return self._output_slit_width[self._output_port.value-2]
+        elif port == 'front':
+            return self._output_slit_width[0]
+        elif port == 'side':
+            return self._output_slit_width[1]
+        else:
+            self.log.error("Port parameter do not match with the possible values : 'current', 'front' and 'side' ")
+            return
         return self._output_slit_width
 
     @output_slit_width.setter
-    def output_slit_width(self, slit_width):
+    def output_slit_width(self, slit_width, port='current'):
         """Setter method setting the active output port slit width of the spectrometer.
 
+        @param slit_width: (Port|str) port
         @param slit_width: (float) output port slit width
         @return: nothing
 
@@ -567,16 +617,27 @@ class SpectrumLogic(GenericLogic):
             self.log.error("Acquisition process is currently running : you can't change this parameter"
                            " until the acquisition is completely stopped ")
             return
-        if not self._output_port.is_motorized:
-            self.log.error('Output port has no motorized slit : this slit width can\'t be changed and'
-                           ' its value is NONE ')
-            return
-        if self._output_slit_width == slit_width:
-            return
+        if isinstance(port, PortType):
+            port = port.name
+        port = str(port)
         slit_width = float(slit_width)
-        self.spectrometer().set_slit_width(self._output_port.type, slit_width)
-        self._output_slit_width = self.spectrometer().get_slit_width(self._output_port.type)
-
+        if port == 'current':
+            port = self._output_port
+        elif port == 'front':
+            port = PortType.OUTPUT_FRONT
+        elif port == 'side':
+            port = PortType.OUTPUT_SIDE
+        else:
+            self.log.error("Port parameter do not match with the possible values : 'current', 'front' and 'side' ")
+            return
+        if port not in self._output_ports:
+            self.log.error('Output port {} doesn\'t exist on your hardware '.format(port.name))
+            return
+        index = self._output_ports.index(port)
+        if self._output_slit_width[index] == slit_width:
+            return
+        self.spectrometer().set_slit_width(port, slit_width)
+        self._output_slit_width[index] = self.spectrometer().get_slit_width(port)
 
     ##############################################################################
     #                            Camera functions
