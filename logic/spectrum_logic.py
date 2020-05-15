@@ -114,26 +114,28 @@ class SpectrumLogic(GenericLogic):
         self._center_wavelength = self.spectrometer().get_wavelength()
 
         # spectro configurations :
-        ports = self.camera_constraints.ports
-        self._output_ports = ports[ports.type == PortType.OUTPUT_SIDE or ports.type == PortType.OUTPUT_FRONT]
-        self._input_ports = ports[ports.type == PortType.INPUT_SIDE or ports.type == PortType.INPUT_FRONT]
+        ports = self.spectro_constraints.ports
+        self._output_ports = [port for port in ports if port.type == PortType.OUTPUT_SIDE or
+                              port.type == PortType.OUTPUT_FRONT]
+        self._input_ports = [port for port in ports if port.type == PortType.INPUT_SIDE or
+                              port.type == PortType.INPUT_FRONT]
 
         # Ports config :
         if len(self._input_ports) < 2:
-            self._input_port = self._input_ports[0]
+            self._input_port = self._input_ports[0].type
         else:
             self._input_port = self.spectrometer().get_input_port()
 
         if len(self._output_ports) < 2:
-            self._output_port = self._output_ports[0]
+            self._output_port = self._output_ports[0].type
         else:
             self._output_port = self.spectrometer().get_output_port()
 
         # Slit width config :
-        self._input_slit_width = [self.spectrometer().get_slit_width(port) if port.is_motorized else None
+        self._input_slit_width = [self.spectrometer().get_slit_width(port.type) if port.is_motorized else None
                                   for port in self._input_ports]
 
-        self._output_slit_width = [self.spectrometer().get_slit_width(port) if port.is_motorized else None
+        self._output_slit_width = [self.spectrometer().get_slit_width(port.type) if port.is_motorized else None
                                    for port in self._output_ports]
 
         # read mode :
@@ -462,7 +464,7 @@ class SpectrumLogic(GenericLogic):
     def input_port(self, input_port):
         """Setter method setting the active current input port of the spectrometer.
 
-        @param input_port: (PortType) active input port (front or side)
+        @param input_port: (str|PortType) active input port (front or side)
         @return: nothing
 
         Tested : yes
@@ -475,7 +477,9 @@ class SpectrumLogic(GenericLogic):
         if len(self._input_ports) < 2:
             self.log.error('Input port has no flipper mirror : this port can\'t be changed ')
             return
-        if not input_port in self._input_ports:
+        if isinstance(input_port, str) and input_port in PortType.__members__:
+            input_port = PortType[input_port]
+        if not np.any([input_port==port.type for port in self._input_ports]):
             self.log.error('Function parameter must be an INPUT value from the input ports of the camera ')
             return
         if input_port == self._input_port.type:
@@ -511,7 +515,9 @@ class SpectrumLogic(GenericLogic):
         if len(self._output_ports) < 2:
             self.log.error('Output port has no flipper mirror : this port can\'t be changed ')
             return
-        if not output_port in self._output_ports:
+        if isinstance(output_port, str) and output_port in PortType.__members__:
+            output_port = PortType[output_port]
+        if not np.any([output_port==port.type for port in self._output_ports]):
             self.log.error('Function parameter must be an OUTPUT value from the output ports of the camera ')
             return
         if output_port == self._output_port.type:
