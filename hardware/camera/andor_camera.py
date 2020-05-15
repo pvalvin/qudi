@@ -142,11 +142,13 @@ class Main(Base, ScienceCameraInterface):
         self._active_tracks = None
         self._image_advanced_parameters = None
         self._readout_speed = None
+        self._preamp_gain = None
         self._read_mode = None
         self._trigger_mode = None
         self._shutter_status = None
         self._cooler_status = None
         self._temperature_setpoint = None
+        self._acquisition_mode = None
 
     ##############################################################################
     #                            Basic module activation/deactivation
@@ -172,7 +174,17 @@ class Main(Base, ScienceCameraInterface):
         self.set_trigger_mode(self._default_trigger_mode)
         self.set_temperature_setpoint(self._default_temperature_degree + 273.15)
 
+        self.set_readout_speed(self._constraints.readout_speeds[0])
+        self.set_gain(self._constraints.internal_gains[0])
         self._set_acquisition_mode(AcquisitionMode.SINGLE_SCAN)
+        self.set_trigger_mode(TriggerMode.INTERNAL)
+
+        if self._constraints.has_shutter:
+            self.set_shutter_state(ShutterState.AUTO)
+
+        if self._constraints.has_cooler:
+            self.set_cooler_on(True)
+            self.set_temperature_setpoint(2)
         self._active_tracks = []
         self._image_advanced_parameters = None
 
