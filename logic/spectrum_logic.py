@@ -67,8 +67,6 @@ class SpectrumLogic(GenericLogic):
 
     # declare status variables (logic attribute) :
     _acquired_data = StatusVar('wavelength_calibration', np.empty((2, 0)))
-
-    # declare status variables (spectro attribute) :
     _wavelength_calibration = StatusVar('wavelength_calibration', 0)
 
     # declare status variables (camera attribute) :
@@ -80,6 +78,7 @@ class SpectrumLogic(GenericLogic):
     _number_of_scan = StatusVar('number_of_scan', 1)
     _number_accumulated_scan = StatusVar('number_accumulated_scan', 1)
     _acquisition_mode = StatusVar('acquisition_mode', 'SINGLE_SCAN')
+    _temperature_setpoint = StatusVar('temperature_setpoint', 275)
 
     # cosmic rejection coeff :
     _coeff_rej_cosmic = StatusVar('coeff_cosmic_rejection', 2.2)
@@ -144,6 +143,8 @@ class SpectrumLogic(GenericLogic):
         # readout speed :
         if self._readout_speed == None:
             self._readout_speed = self.camera().get_readout_speed()
+        else:
+            self.camera().set_readout_speed(self._readout_speed)
 
         # active tracks :
         self._active_tracks = self.camera().get_active_tracks()
@@ -154,20 +155,25 @@ class SpectrumLogic(GenericLogic):
         # internal gain :
         if self._camera_gain==None:
             self._camera_gain = self.camera().get_gain()
+        else:
+            self.camera().set_gain(self._camera_gain)
 
         # exposure time :
         if self._exposure_time==None:
             self._exposure_time = self.camera().get_exposure_time()
+        else:
+            self.camera().set_exposure_time(self._exposure_time)
 
         # trigger mode :
         self._trigger_mode = self.camera().get_trigger_mode()
 
         # shutter state :
         if self.camera_constraints.has_shutter:
-            self._shutter_state = self.camera().get_trigger_mode()
+            self._shutter_state = self.camera().get_shutter_mode()
 
         # temperature setpoint :
-        self._temperature_setpoint = self.camera().get_temperature_setpoint()
+        if self.camera_constraints.has_cooler:
+            self.camera().set_temperature_setpoint(self._temperature_setpoint)
 
         # QTimer for asynchronous execution :
         self._loop_timer = QtCore.QTimer()
