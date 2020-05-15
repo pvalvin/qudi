@@ -177,14 +177,14 @@ class Main(Base, ScienceCameraInterface):
         self.set_readout_speed(self._constraints.readout_speeds[0])
         self.set_gain(self._constraints.internal_gains[0])
         self._set_acquisition_mode(AcquisitionMode.SINGLE_SCAN)
-        self.set_trigger_mode(TriggerMode.INTERNAL)
+        self.set_trigger_mode(self._constraints.trigger_modes[0])
 
         if self._constraints.has_shutter:
             self.set_shutter_state(ShutterState.AUTO)
 
         if self._constraints.has_cooler:
             self.set_cooler_on(True)
-            self.set_temperature_setpoint(2)
+
         self._active_tracks = []
         self._image_advanced_parameters = None
 
@@ -401,7 +401,7 @@ class Main(Base, ScienceCameraInterface):
 
         Should only be used while in IMAGE_ADVANCED mode
         """
-        return self._advanced_image_parameters  # No getter in the DLL
+        return self._image_advanced_parameters  # No getter in the DLL
 
     def set_image_advanced_parameters(self, value):
         """ Setter method setting the read mode image parameters of the camera.
@@ -477,9 +477,6 @@ class Main(Base, ScienceCameraInterface):
         """
         if value < 0:
             self.log.error('Exposure_time ({} s) can not be negative.'.format(value))
-            return
-        if value > self._max_exposure_time:
-            self.log.error('Exposure time ({} s) is above the high limit ({} s)'.format(value, self._max_exposure_time))
             return
         self._check(self._dll.SetExposureTime(ct.c_float(value)))
 
