@@ -354,7 +354,7 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the grating index to use by the spectrometer.
 
         @param grating_index: (int) gating index to set active
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -366,7 +366,7 @@ class SpectrumLogic(GenericLogic):
         grating_number = int(grating_index)
         if grating_index == self._grating_index:
             return
-        number_of_gratings = len(self.spectro_constraints.gratings)
+        number_of_gratings = self.spectro_constraints._get_number_gratings()
         if not 0 <= grating_index < number_of_gratings:
             self.log.error('Grating number parameter is not correct : it must be in range 0 to {} '
                            .format(number_of_gratings - 1))
@@ -394,7 +394,7 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the center wavelength of the measured spectral range.
 
         @param wavelength: (float) center wavelength
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -448,7 +448,7 @@ class SpectrumLogic(GenericLogic):
         """Setter method
 
         @param wavelength_calibration (float) : wavelength shift used for spectrum calibration
-        @return: nothing
+
         """
         if self.module_state() == 'locked':
             self.log.error("Acquisition process is currently running : you can't change this parameter"
@@ -478,7 +478,7 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the active current input port of the spectrometer.
 
         @param input_port: (str|PortType) active input port (front or side)
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -516,7 +516,7 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the active current output port of the spectrometer.
 
         @param output_port: (int) active output port (0 front and 1 side)
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -539,13 +539,49 @@ class SpectrumLogic(GenericLogic):
         self._output_port = self.spectrometer().get_output_port()
 
     @property
-    def input_slit_width(self, port='current'):
+    def input_slit_width(self):
         """Getter method returning the active input port slit width of the spectrometer.
 
-        @param slit_width: (Port|str) port
         @return: (float) input port slit width
+        """
+        return self.get_input_slit_width(self._input_port.name)
 
+    @input_slit_width.setter
+    def input_slit_width(self, slit_width):
+        """Setter method setting the active input port slit width of the spectrometer.
 
+        @param slit_width: (float) input port slit width
+
+        """
+        self.set_input_slit_width(slit_width, self._input_port.name)
+
+    @property
+    def output_slit_width(self):
+        """Getter method returning the active output port slit width of the spectrometer.
+
+        @return: (float) output port slit width
+
+        Tested : yes
+        SI check : yes
+        """
+        return self.get_output_slit_width(self._output_port.name)
+
+    @output_slit_width.setter
+    def output_slit_width(self, slit_width):
+        """Setter method setting the active output port slit width of the spectrometer.
+
+        @param slit_width: (float) output port slit width
+
+        Tested : yes
+        SI check : yes
+        """
+        self.set_output_slit_width(slit_width, self._output_port.name)
+
+    def get_input_slit_width(self, port='current'):
+        """Getter method returning the active input port slit width of the spectrometer.
+
+        @param input port: (Port|str) port
+        @return: (float) input port slit width
         """
         if isinstance(port, PortType):
             port = port.name
@@ -565,15 +601,11 @@ class SpectrumLogic(GenericLogic):
         index = self._input_ports.index(port)
         return self._input_slit_width[index]
 
-    @input_slit_width.setter
-    def input_slit_width(self, slit_width, port='current'):
+    def set_input_slit_width(self, slit_width, port='current'):
         """Setter method setting the active input port slit width of the spectrometer.
 
-        @param slit_width: (Port|str) port
         @param slit_width: (float) input port slit width
-        @return: nothing
-
-
+        @param input port: (Port|str) port
         """
         if self.module_state() == 'locked':
             self.log.error("Acquisition process is currently running : you can't change this parameter"
@@ -601,11 +633,10 @@ class SpectrumLogic(GenericLogic):
         self.spectrometer().set_slit_width(port, slit_width)
         self._input_slit_width[index] = self.spectrometer().get_slit_width(port)
 
-    @property
-    def output_slit_width(self, port='current'):
+    def get_output_slit_width(self, port='current'):
         """Getter method returning the active output port slit width of the spectrometer.
 
-        @param slit_width: (Port|str) port
+        @param output port: (Port|str) port
         @return: (float) output port slit width
 
         Tested : yes
@@ -627,13 +658,11 @@ class SpectrumLogic(GenericLogic):
         index = self._output_ports.index(port)
         return self._output_slit_width
 
-    @output_slit_width.setter
-    def output_slit_width(self, slit_width, port='current'):
+    def set_output_slit_width(self, slit_width, port='current'):
         """Setter method setting the active output port slit width of the spectrometer.
 
-        @param slit_width: (Port|str) port
         @param slit_width: (float) output port slit width
-        @return: nothing
+        @param output port: (Port|str) port
 
         Tested : yes
         SI check : yes
@@ -742,7 +771,7 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the readout speed to use by the camera.
 
         @param readout_speed: (float) readout speed in Hz
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -778,7 +807,7 @@ class SpectrumLogic(GenericLogic):
         Setter method setting the read mode tracks parameters of the camera.
 
         @param active_tracks: (list) active tracks positions [1st track start, 1st track end, ... ]
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -887,7 +916,7 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the acquisition mode used by the camera.
 
         @param (str|AcquisitionMode): Acquisition mode as a string or an object
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -922,7 +951,7 @@ class SpectrumLogic(GenericLogic):
         @param camera_gain: (float) new gain to set to the camera preamplifier which must correspond to the
         internal gain list given by the constraints dictionary.
 
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -957,7 +986,7 @@ class SpectrumLogic(GenericLogic):
 
         @param exposure_time: (float) desired new exposure time
 
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -991,7 +1020,7 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the accumulation delay between consecutive scan during an accumulate acquisition mode.
 
         @param accumulation_delay: (float) accumulation delay
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -1029,7 +1058,7 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the scan delay between consecutive scan during multiple acquisition mode.
 
         @param scan_delay: (float) scan delay
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -1066,7 +1095,7 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the number of accumulated scan during accumulate acquisition mode.
 
         @param number_scan: (int) number of accumulated scan
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -1102,7 +1131,7 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the number of acquired scan during multiple acquisition mode.
 
         @param number_scan: (int) number of acquired scan
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -1139,7 +1168,7 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the trigger mode used by the camera.
 
         @param trigger_mode: (str) trigger mode
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
@@ -1182,7 +1211,7 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the shutter state.
 
         @param shutter_mode: (str) shutter mode
-        @return: nothing
+
 
         Tested : yes
         SI check : yes
