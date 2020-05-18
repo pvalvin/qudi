@@ -224,7 +224,7 @@ class Main(Base, ScienceCameraInterface):
         constraints = Constraints()
         constraints.name = self._get_name()
         constraints.width, constraints.height = self._get_image_size()
-        constraints.pixel_size_width, constraints.pixel_size_width = self._get_pixel_size()
+        constraints.pixel_size_width, constraints.pixel_size_height = self._get_pixel_size()
         constraints.internal_gains = self._get_available_gains()
         constraints.readout_speeds = self._get_available_speeds()
         constraints.trigger_modes = self._get_available_trigger_modes()

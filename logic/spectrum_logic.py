@@ -422,11 +422,15 @@ class SpectrumLogic(GenericLogic):
         Tested : yes (need to
         SI check : yes
         """
-        image_length = self.camera_constraints['image_size'][1]
-        pixel_length = self.camera_constraints['pixel_size'][1]
-        pixels_vector = np.arange(-image_length//2, image_length//2 - image_length%2)*pixel_length
-        focal_length, angular_dev, focal_tilt = self.spectro_constraints['optical_parameters']
-        ruling, blaze = self.spectro_constraints['gratings_info'][self._grating_number]
+        image_width = self.camera_constraints.width
+        pixel_width = self.camera_constraints.pixel_size_width
+        focal_length = self.spectro_constraints.focal_length
+        angular_dev = self.spectro_constraints.angular_deviation
+        focal_tilt = self.spectro_constraints.focal_tilt
+        grating = self.spectro_constraints.gratings[self._grating_index]
+        ruling = grating.ruling
+        blaze = grating.blaze
+        pixels_vector = np.arange(-image_width//2, image_width//2 - image_width%2)*pixel_width
         wavelength_spectrum = pixels_vector/np.sqrt(focal_length**2+pixels_vector**2)/ruling + self._center_wavelength
         return wavelength_spectrum
 
@@ -547,14 +551,18 @@ class SpectrumLogic(GenericLogic):
             port = port.name
         port = str(port)
         if port == 'current':
-            index = self._input_ports.index(self._input_port)
+            port = self._input_port.name
         elif port == 'front':
-            index = self._input_ports.index(PortType.INPUT_FRONT)
+            port = PortType.INPUT_FRONT
         elif port == 'side':
-            index = self._input_ports.index(PortType.INPUT_SIDE)
+            port = PortType.INPUT_SIDE
         else:
             self.log.error("Port parameter do not match with the possible values : 'current', 'front' and 'side' ")
             return
+        if port not in self._input_ports:
+            self.log.error('Input port {} doesn\'t exist on your hardware '.format(port.name))
+            return
+        index = self._input_ports.index(port)
         return self._input_slit_width[index]
 
     @input_slit_width.setter
@@ -576,7 +584,7 @@ class SpectrumLogic(GenericLogic):
         port = str(port)
         slit_width = float(slit_width)
         if port == 'current':
-            port = self._input_port
+            port = self._input_port.name
         elif port == 'front':
             port = PortType.INPUT_FRONT
         elif port == 'side':
@@ -605,14 +613,18 @@ class SpectrumLogic(GenericLogic):
         """
         port = str(port)
         if port == 'current':
-            return self._output_slit_width[self._output_port.value-2]
+            port = self._output_port.name
         elif port == 'front':
-            return self._output_slit_width[0]
+            port = PortType.OUTPUT_FRONT
         elif port == 'side':
-            return self._output_slit_width[1]
+            port = PortType.OUTPUT_SIDE
         else:
             self.log.error("Port parameter do not match with the possible values : 'current', 'front' and 'side' ")
             return
+        if port not in self._output_ports:
+            self.log.error('Output port {} doesn\'t exist on your hardware '.format(port.name))
+            return
+        index = self._output_ports.index(port)
         return self._output_slit_width
 
     @output_slit_width.setter
@@ -635,7 +647,7 @@ class SpectrumLogic(GenericLogic):
         port = str(port)
         slit_width = float(slit_width)
         if port == 'current':
-            port = self._output_port
+            port = self._output_port.name
         elif port == 'front':
             port = PortType.OUTPUT_FRONT
         elif port == 'side':
