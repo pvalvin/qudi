@@ -183,6 +183,9 @@ class SpectrumLogic(GenericLogic):
         self._loop_timer.timeout.connect(self.loop_acquisition)
         self._loop_counter = 0
 
+        self._status_timer = QtCore.QTimer()
+        self._status_timer.timeout.connect(self._check_status)
+
     def on_deactivate(self):
         """ Deinitialisation performed during deactivation of the module.
         """
@@ -204,9 +207,7 @@ class SpectrumLogic(GenericLogic):
         self.module_state.lock()
         if self._acquisition_mode == 'SINGLE_SCAN':
             self.camera().start_acquisition()
-            self.module_state.unlock()
-            self._acquired_data = self.get_acquired_data()
-            self.log.info("Acquisition finished : module state is 'idle' ")
+            self._status_timer.start(self._exposure_time)
             return
         self._loop_counter = self.number_of_loop
         self.loop_acquisition()
@@ -219,6 +220,10 @@ class SpectrumLogic(GenericLogic):
         Tested : yes
         SI check : yes
         """
+        if self.camera().get_ready_state():
+            self._timer.start(self.exposure_time)
+            return
+
         self.camera().start_acquisition()
         self.number_of_loop -= 1
 
@@ -281,6 +286,11 @@ class SpectrumLogic(GenericLogic):
             clean_data = np.append(clean_data, clean_track)
         return np.transpose(clean_data,(2,0,1))
 
+    def _check_status(self):
+        if self.camera().get_ready_state():
+            self.module_state.unlock()
+            self._acquired_data = self.get_acquired_data()
+            self.log.info("Acquisition finished : module state is 'idle' ")
 
     def stop_acquisition(self):
         """Method calling the stop acquisition method from the camera hardware module and changing the
@@ -443,7 +453,7 @@ class SpectrumLogic(GenericLogic):
         """
         return self._wavelength_calibration
 
-    @property
+    @wavelength_calibration.setter
     def wavelength_calibration(self, wavelength_calibration):
         """Setter method
 
@@ -544,7 +554,7 @@ class SpectrumLogic(GenericLogic):
 
         @return: (float) input port slit width
         """
-        return self.get_input_slit_width(self._input_port.name)
+        return self.get_input_slit_width()
 
     @input_slit_width.setter
     def input_slit_width(self, slit_width):
@@ -553,7 +563,7 @@ class SpectrumLogic(GenericLogic):
         @param slit_width: (float) input port slit width
 
         """
-        self.set_input_slit_width(slit_width, self._input_port.name)
+        self.set_input_slit_width(slit_width)
 
     @property
     def output_slit_width(self):
@@ -564,7 +574,7 @@ class SpectrumLogic(GenericLogic):
         Tested : yes
         SI check : yes
         """
-        return self.get_output_slit_width(self._output_port.name)
+        return self.get_output_slit_width()
 
     @output_slit_width.setter
     def output_slit_width(self, slit_width):
@@ -575,7 +585,7 @@ class SpectrumLogic(GenericLogic):
         Tested : yes
         SI check : yes
         """
-        self.set_output_slit_width(slit_width, self._output_port.name)
+        self.set_output_slit_width(slit_width)
 
     def get_input_slit_width(self, port='current'):
         """Getter method returning the active input port slit width of the spectrometer.
@@ -587,7 +597,7 @@ class SpectrumLogic(GenericLogic):
             port = port.name
         port = str(port)
         if port == 'current':
-            port = self._input_port.name
+            port = self._input_port
         elif port == 'front':
             port = PortType.INPUT_FRONT
         elif port == 'side':
@@ -595,10 +605,11 @@ class SpectrumLogic(GenericLogic):
         else:
             self.log.error("Port parameter do not match with the possible values : 'current', 'front' and 'side' ")
             return
-        if port not in self._input_ports:
+        input_types = [port.type for port in self._input_ports]
+        if port not in input_types:
             self.log.error('Input port {} doesn\'t exist on your hardware '.format(port.name))
             return
-        index = self._input_ports.index(port)
+        index = input_types.index(port)
         return self._input_slit_width[index]
 
     def set_input_slit_width(self, slit_width, port='current'):
@@ -616,7 +627,7 @@ class SpectrumLogic(GenericLogic):
         port = str(port)
         slit_width = float(slit_width)
         if port == 'current':
-            port = self._input_port.name
+            port = self._input_port
         elif port == 'front':
             port = PortType.INPUT_FRONT
         elif port == 'side':
@@ -624,10 +635,11 @@ class SpectrumLogic(GenericLogic):
         else:
             self.log.error("Port parameter do not match with the possible values : 'current', 'front' and 'side' ")
             return
-        if port not in self._input_ports:
+        input_types = [port.type for port in self._input_ports]
+        if port not in input_types:
             self.log.error('Input port {} doesn\'t exist on your hardware '.format(port.name))
             return
-        index = self._input_ports.index(port)
+        index = input_types.index(port)
         if self._input_slit_width[index] == slit_width:
             return
         self.spectrometer().set_slit_width(port, slit_width)
@@ -644,7 +656,7 @@ class SpectrumLogic(GenericLogic):
         """
         port = str(port)
         if port == 'current':
-            port = self._output_port.name
+            port = self._output_port
         elif port == 'front':
             port = PortType.OUTPUT_FRONT
         elif port == 'side':
@@ -652,11 +664,12 @@ class SpectrumLogic(GenericLogic):
         else:
             self.log.error("Port parameter do not match with the possible values : 'current', 'front' and 'side' ")
             return
-        if port not in self._output_ports:
+        output_types = [port.type for port in self._output_ports]
+        if port not in output_types:
             self.log.error('Output port {} doesn\'t exist on your hardware '.format(port.name))
             return
-        index = self._output_ports.index(port)
-        return self._output_slit_width
+        index = output_types.index(port)
+        return self._output_slit_width[index]
 
     def set_output_slit_width(self, slit_width, port='current'):
         """Setter method setting the active output port slit width of the spectrometer.
@@ -676,7 +689,7 @@ class SpectrumLogic(GenericLogic):
         port = str(port)
         slit_width = float(slit_width)
         if port == 'current':
-            port = self._output_port.name
+            port = self._output_port
         elif port == 'front':
             port = PortType.OUTPUT_FRONT
         elif port == 'side':
@@ -684,10 +697,11 @@ class SpectrumLogic(GenericLogic):
         else:
             self.log.error("Port parameter do not match with the possible values : 'current', 'front' and 'side' ")
             return
-        if port not in self._output_ports:
+        output_types = [port.type for port in self._output_ports]
+        if port not in output_types:
             self.log.error('Output port {} doesn\'t exist on your hardware '.format(port.name))
             return
-        index = self._output_ports.index(port)
+        index = output_types.index(port)
         if self._output_slit_width[index] == slit_width:
             return
         self.spectrometer().set_slit_width(port, slit_width)
@@ -817,13 +831,13 @@ class SpectrumLogic(GenericLogic):
                            " until the acquisition is completely stopped ")
             return
         active_tracks = np.array(active_tracks)
-        image_width = self.camera_constraints.width
-        if not (np.all(0<active_tracks) and np.all(active_tracks<image_width)):
+        image_height = self.camera_constraints.height
+        if not (np.all(0<=active_tracks) and np.all(active_tracks<image_height)):
             self.log.error("Active tracks positions are out of range : some position given are outside the "
                              "camera width in pixel ")
             return
         if not len(active_tracks)%2 == 0:
-            active_tracks = np.append(active_tracks, image_width-1)
+            active_tracks = np.append(active_tracks, image_height-1)
         if active_tracks == self._active_tracks:
             return
         active_tracks = [(active_tracks[i], active_tracks[i+1]) for i in range(0, len(active_tracks), 2)]
@@ -832,7 +846,8 @@ class SpectrumLogic(GenericLogic):
 
     @property
     def image_advanced_binning(self):
-        return self._image_advanced.horizontal_binning, self._image_advanced.vertical_binning
+        return {'horizontal_binning': self._image_advanced.horizontal_binning,
+                 'vertical_binning': self._image_advanced.vertical_binning}
 
     @image_advanced_binning.setter
     def image_advanced_binning(self, binning):
@@ -855,8 +870,8 @@ class SpectrumLogic(GenericLogic):
 
     @property
     def image_advanced_area(self):
-        return [(self._image_advanced.horizontal_start, self._image_advanced.horizontal_end),
-                (self._image_advanced.vertical_start, self._image_advanced.vertical_end)]
+        return {'horizontal_range': (self._image_advanced.horizontal_start, self._image_advanced.horizontal_end),
+                'vertical_range': (self._image_advanced.vertical_start, self._image_advanced.vertical_end)}
 
     @image_advanced_area.setter
     def image_advanced_area(self, image_advanced_area):
@@ -871,11 +886,11 @@ class SpectrumLogic(GenericLogic):
             return
         width = self.camera_constraints.width
         height = self.camera_constraints.height
-        if not (0 < image_advanced_area[0] < image_advanced_area[1] < width):
+        if not (0 <= image_advanced_area[0] < image_advanced_area[1] < width):
             self.log.error("Image area horizontal parameter are out of range : "
                            "the limits are outside the camera dimensions in pixel or not sorted ")
             return
-        if not (0 < image_advanced_area[2] < image_advanced_area[3] < height):
+        if not (0 <= image_advanced_area[2] < image_advanced_area[3] < height):
             self.log.error("Image area vertical parameter are out of range : "
                            "the limits are outside the camera dimensions in pixel or not sorted")
             return
@@ -917,7 +932,6 @@ class SpectrumLogic(GenericLogic):
 
         @param (str|AcquisitionMode): Acquisition mode as a string or an object
 
-
         Tested : yes
         SI check : yes
         """
@@ -950,7 +964,6 @@ class SpectrumLogic(GenericLogic):
 
         @param camera_gain: (float) new gain to set to the camera preamplifier which must correspond to the
         internal gain list given by the constraints dictionary.
-
 
 
         Tested : yes
@@ -986,8 +999,6 @@ class SpectrumLogic(GenericLogic):
 
         @param exposure_time: (float) desired new exposure time
 
-
-
         Tested : yes
         SI check : yes
         """
@@ -1020,7 +1031,6 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the accumulation delay between consecutive scan during an accumulate acquisition mode.
 
         @param accumulation_delay: (float) accumulation delay
-
 
         Tested : yes
         SI check : yes
@@ -1059,7 +1069,6 @@ class SpectrumLogic(GenericLogic):
 
         @param scan_delay: (float) scan delay
 
-
         Tested : yes
         SI check : yes
         """
@@ -1074,6 +1083,10 @@ class SpectrumLogic(GenericLogic):
         if not self._exposure_time < scan_delay:
             self.log.error("Scan delay parameter must be a value bigger than"
                            "the current exposure time {} ".format(self._exposure_time))
+            return
+        if not self._accumulation_delay < scan_delay and self._acquisition_mode[:3] == 'ACC':
+            self.log.error("Scan delay parameter must be a value bigger than"
+                           "the current exposure time {} ".format(self._accumulation_delay))
             return
         if scan_delay == self._scan_delay:
             return
@@ -1095,7 +1108,6 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the number of accumulated scan during accumulate acquisition mode.
 
         @param number_scan: (int) number of accumulated scan
-
 
         Tested : yes
         SI check : yes
@@ -1132,7 +1144,6 @@ class SpectrumLogic(GenericLogic):
 
         @param number_scan: (int) number of acquired scan
 
-
         Tested : yes
         SI check : yes
         """
@@ -1168,7 +1179,6 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the trigger mode used by the camera.
 
         @param trigger_mode: (str) trigger mode
-
 
         Tested : yes
         SI check : yes
@@ -1211,7 +1221,6 @@ class SpectrumLogic(GenericLogic):
         """Setter method setting the shutter state.
 
         @param shutter_mode: (str) shutter mode
-
 
         Tested : yes
         SI check : yes
@@ -1267,6 +1276,9 @@ class SpectrumLogic(GenericLogic):
         """ Getter method returning the temperature of the camera.
 
         @return (float): temperature (in Kelvin)
+
+        Tested : yes
+        SI check : yes
         """
         if not self.camera_constraints.has_cooler:
             self.log.error("No cooler is available in your hardware ")
@@ -1278,6 +1290,9 @@ class SpectrumLogic(GenericLogic):
         """ Getter method for the temperature setpoint of the camera.
 
         @return (float): Current setpoint in Kelvin
+
+        Tested : yes
+        SI check : yes
         """
         if not self.camera_constraints.has_cooler:
             self.log.error("No cooler is available in your hardware ")
@@ -1289,6 +1304,9 @@ class SpectrumLogic(GenericLogic):
         """ Setter method for the the temperature setpoint of the camera.
 
         @param (float) value: New setpoint in Kelvin
+
+        Tested : yes
+        SI check : yes
         """
         if not self.camera_constraints.has_cooler:
             self.log.error("No cooler is available in your hardware ")
