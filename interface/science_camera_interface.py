@@ -71,11 +71,11 @@ class Constraints:
 class ImageAdvancedParameters:
     """ Class defining formally a binning and a region of the camera for IMAGE_ADVANCED mode """
     def __init__(self):
-        self.horizontal_binning = 1,
-        self.vertical_binning = 1,
-        self.horizontal_start = 0,
-        self.horizontal_end = None,  # Has to be an integer
-        self.vertical_start = 0,
+        self.horizontal_binning = 1
+        self.vertical_binning = 1
+        self.horizontal_start = 0
+        self.horizontal_end = None  # Has to be an integer
+        self.vertical_start = 0
         self.vertical_end = None  # Has to be an integer
 
 

@@ -297,7 +297,6 @@ class Shamrock(Base, GratingSpectrometerInterface):
         if not self._flipper_mirror_is_present('output') and port_type == PortType.OUTPUT_FRONT:
             self.log.debug('No flipper mirror is present on the input port : PortType.OUTPUT_SIDE value is forbidden ')
             return
-        # TODO : Problem with 'communication error' : no way to get or set the slit width on the output port !!!
         if not self._flipper_mirror_is_present('input') and port_type == PortType.INPUT_FRONT:
             self.log.debug('No flipper mirror is present on the input port : PortType.OUTPUT_SIDE value is forbidden ')
             return
