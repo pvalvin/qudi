@@ -183,6 +183,11 @@ class SpectrumLogic(GenericLogic):
         self._loop_timer.timeout.connect(self.loop_acquisition)
         self._loop_counter = 0
 
+        # QTimer for asynchronous execution :
+        self._check_status_timer = QtCore.QTimer()
+        self._loop_timer.timeout.connect(self._check_status)
+        self._loop_counter = 0
+
     def on_deactivate(self):
         """ Deinitialisation performed during deactivation of the module.
         """
@@ -204,9 +209,7 @@ class SpectrumLogic(GenericLogic):
         self.module_state.lock()
         if self._acquisition_mode == 'SINGLE_SCAN':
             self.camera().start_acquisition()
-            self.module_state.unlock()
-            self._acquired_data = self.get_acquired_data()
-            self.log.info("Acquisition finished : module state is 'idle' ")
+            self._check_status_timer.start(self._exposure_time)
             return
         self._loop_counter = self.number_of_loop
         self.loop_acquisition()
@@ -219,6 +222,11 @@ class SpectrumLogic(GenericLogic):
         Tested : yes
         SI check : yes
         """
+
+        if not self.spectrometer().get_ready_state():
+            self._timer.start(self._exposure_time)
+            return
+
         self.camera().start_acquisition()
         self.number_of_loop -= 1
 
@@ -281,6 +289,11 @@ class SpectrumLogic(GenericLogic):
             clean_data = np.append(clean_data, clean_track)
         return np.transpose(clean_data,(2,0,1))
 
+    def check_status(self):
+        if self.spectrometer().get_ready_state():
+            self.module_state.unlock()
+            self._acquired_data = self.get_acquired_data()
+            self.log.info("Acquisition finished : module state is 'idle' ")
 
     def stop_acquisition(self):
         """Method calling the stop acquisition method from the camera hardware module and changing the
