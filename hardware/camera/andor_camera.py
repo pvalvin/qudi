@@ -124,6 +124,7 @@ class Main(Base, ScienceCameraInterface):
     _start_cooler_on_activate = ConfigOption('start_cooler_on_activate', True)
     _default_temperature_degree = ConfigOption('default_temperature', -90)  # Temperature in °C (not Kelvin !)
     _default_trigger_mode = ConfigOption('default_trigger_mode', 'INTERNAL')
+    _has_external_shutter = ConfigOption('has_external_shutter', False)
 
     # The typ parameter allows the user to control the TTL signal output to an external shutter.
     # 0 Output TTL low signal to open shutter
@@ -185,8 +186,10 @@ class Main(Base, ScienceCameraInterface):
         if self._constraints.has_cooler:
             self.set_cooler_on(True)
 
-        self._active_tracks = []
-        self._image_advanced_parameters = None
+        self._active_tracks = [(0, self._constraints.height-1)]
+        self._image_advanced_parameters = ImageAdvancedParameters()
+        self._image_advanced_parameters.horizontal_end = self._constraints.width
+        self._image_advanced_parameters.vertical_end = self._constraints.height
 
     def on_deactivate(self):
         """ De-initialisation performed during deactivation of the module. """
@@ -387,7 +390,7 @@ class Main(Base, ScienceCameraInterface):
 
     def _update_active_tracks(self):
         """ Internal function that send the current active tracks to the DLL """
-        flatten_tracks = np.array(self._active_tracks).flatten()
+        flatten_tracks = np.array(self._active_tracks).flatten()+1
         self._dll.SetRandomTracks.argtypes = [ct.c_int32, ct.c_void_p]
         status_code = self._check(self._dll.SetRandomTracks(len(self._active_tracks), flatten_tracks.ctypes.data))
         self._check(status_code)
@@ -497,6 +500,7 @@ class Main(Base, ScienceCameraInterface):
             return
         gain_index = self.get_constraints().internal_gains.index(value)
         self._check(self._dll.SetPreAmpGain(gain_index))
+        self._preamp_gain = value
 
     ##############################################################################
     #                           Trigger mode functions
@@ -694,6 +698,8 @@ class Main(Base, ScienceCameraInterface):
 
         @return (bool): True if the camera have a shutter
         """
+        if self._has_external_shutter:
+            return True
         result = ct.c_int()
         self._check(self._dll.IsInternalMechanicalShutter(ct.byref(result)))
         return bool(result.value)  # 0: Mechanical shutter not installed, 1: Mechanical shutter installed.
