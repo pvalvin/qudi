@@ -183,15 +183,8 @@ class SpectrumLogic(GenericLogic):
         self._loop_timer.timeout.connect(self.loop_acquisition)
         self._loop_counter = 0
 
-<<<<<<< HEAD
-        # QTimer for asynchronous execution :
-        self._check_status_timer = QtCore.QTimer()
-        self._loop_timer.timeout.connect(self._check_status)
-        self._loop_counter = 0
-=======
         self._status_timer = QtCore.QTimer()
         self._status_timer.timeout.connect(self._check_status)
->>>>>>> qudi_spectrometer
 
     def on_deactivate(self):
         """ Deinitialisation performed during deactivation of the module.
@@ -214,11 +207,7 @@ class SpectrumLogic(GenericLogic):
         self.module_state.lock()
         if self._acquisition_mode == 'SINGLE_SCAN':
             self.camera().start_acquisition()
-<<<<<<< HEAD
-            self._check_status_timer.start(self._exposure_time)
-=======
             self._status_timer.start(self._exposure_time)
->>>>>>> qudi_spectrometer
             return
         self._loop_counter = self.number_of_loop
         self.loop_acquisition()
@@ -231,14 +220,8 @@ class SpectrumLogic(GenericLogic):
         Tested : yes
         SI check : yes
         """
-<<<<<<< HEAD
-
-        if not self.spectrometer().get_ready_state():
-            self._timer.start(self._exposure_time)
-=======
         if self.camera().get_ready_state():
             self._timer.start(self.exposure_time)
->>>>>>> qudi_spectrometer
             return
 
         self.camera().start_acquisition()
@@ -303,13 +286,8 @@ class SpectrumLogic(GenericLogic):
             clean_data = np.append(clean_data, clean_track)
         return np.transpose(clean_data,(2,0,1))
 
-<<<<<<< HEAD
-    def check_status(self):
-        if self.spectrometer().get_ready_state():
-=======
     def _check_status(self):
         if self.camera().get_ready_state():
->>>>>>> qudi_spectrometer
             self.module_state.unlock()
             self._acquired_data = self.get_acquired_data()
             self.log.info("Acquisition finished : module state is 'idle' ")
