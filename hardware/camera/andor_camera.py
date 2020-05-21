@@ -419,7 +419,7 @@ class Main(Base, ScienceCameraInterface):
         """ Internal method that send the current appropriate image settings to the DLL"""
 
         if self.get_read_mode() == ReadMode.IMAGE:
-            status_code = self._dll.SetImage(1, 1, 0, self.get_constraints().width, 0, self.get_constraints().height)
+            status_code = self._dll.SetImage(1, 1, 1, self.get_constraints().width, 1, self.get_constraints().height)
             self._check(status_code)
 
         elif self.get_read_mode() == ReadMode.IMAGE_ADVANCED:
