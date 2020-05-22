@@ -35,7 +35,6 @@ COM_ERROR = False
 try:
     ctc.GetModule(('{1A762221-D8BA-11CF-AFC2-508201C10000}', 3, 11))  # Winspec unique id
     import comtypes.gen.WINX32Lib as WinSpecLib
-    from win32com.client import constants as csts
 except:  # todo: add clause
     COM_ERROR = True  # Let's store the error to print it at activation
 
@@ -76,7 +75,7 @@ class Main(Base, ScienceCameraInterface):
     def _get(self, parameter_number):
         """ Function that query the library to get parameters value
 
-        @param (int) parameter_number: Parameter associated constant as csts.EXP_SOMEPARAM
+        @param (int) parameter_number: Parameter associated constant as WinSpecLib.EXP_SOMEPARAM
 
         @return (int|float): The current value"""
         value, status = self._exp_setup.GetParam(parameter_number)
@@ -88,7 +87,7 @@ class Main(Base, ScienceCameraInterface):
     def _set(self, parameter_number, value):
         """ Function that query the library to set parameters value
 
-        @param (int) parameter_number: Parameter associated constant as csts.EXP_SOMEPARAM
+        @param (int) parameter_number: Parameter associated constant as WinSpecLib.EXP_SOMEPARAM
         @param (int): The value to set """
         status = self._exp_setup.SetParam(parameter_number, value)
         if status != 0:
@@ -114,7 +113,7 @@ class Main(Base, ScienceCameraInterface):
         constraints.temperature.min, constraints.temperature.max = self._get_temperature_range()
         constraints.temperature.step = .5
 
-        return constraints
+        self._constraints = constraints
 
     def get_constraints(self):
         """ Returns all the fixed parameters of the hardware which can be used by the logic.
@@ -129,7 +128,9 @@ class Main(Base, ScienceCameraInterface):
     def start_acquisition(self):
         """ Starts the acquisition """
         self._doc_file = w32c.Dispatch("WinX32.DocFile")
-        status = self.expSetup.Start(self.docFile)[0]
+        self._doc_files = w32c.Dispatch("WinX32.DocFiles")
+        self._exp_setup = w32c.Dispatch("WinX32.ExpSetup")
+        status = self._exp_setup.Start(self._doc_file)[0]
         return status  # todo: check
 
     def _wait_for_acquisition(self):
@@ -146,7 +147,7 @@ class Main(Base, ScienceCameraInterface):
 
         @return (bool): True if the camera is ready, False if an acquisition is ongoing
         """
-        is_running = self._get(csts.EXP_RUNNING)
+        is_running = self._get(WinSpecLib.EXP_RUNNING)
         return not is_running
 
     def get_acquired_data(self):
@@ -169,8 +170,7 @@ class Main(Base, ScienceCameraInterface):
             height = self.get_constraints().height
 
         data_pointer = c_float()
-        doc_file = w32c.Dispatch("WinX32.DocFile")
-        data = np.array(doc_file.GetFrame(1, data_pointer))
+        data = np.array(self._doc_file.GetFrame(1, data_pointer))
 
         if self.get_read_mode() == ReadMode.FVB:
             return np.array(data)
@@ -185,13 +185,13 @@ class Main(Base, ScienceCameraInterface):
         WinSpec doesn't actually store the wavelength information as an array but instead calculates it every time
         it plot using the calibration information stored with the spectrum.
         """
-        doc_file = w32c.Dispatch("WinX32.DocFile")
-        calibration = doc_file.GetCalibration()
+        #doc_file = w32c.Dispatch("WinX32.DocFile")
+        calibration = self._doc_file.GetCalibration()
         if calibration.Order != 2:
             self.log.error('Cannot handle current WinSpec wavelength calibration.')
 
         p = np.array([calibration.PolyCoeffs(2),calibration.PolyCoeffs(1), calibration.PolyCoeffs(0)])
-        axis = np.polyval(p, range(1, 1 + len(self.get_constraints().width))) * 1e-9  # WinSpec talks in nm
+        axis = np.polyval(p, range(1, 1 + self.get_constraints().width)) * 1e-9  # WinSpec talks in nm
         return axis
 
     ##############################################################################
@@ -202,7 +202,7 @@ class Main(Base, ScienceCameraInterface):
 
         @return (ReadMode): Current read mode
         """
-        value = self._get(csts.EXP_ROIMODE)
+        value = self._get(WinSpecLib.EXP_ROIMODE)
         if value == 0:
             return ReadMode.FVB
         elif value == 1:
@@ -221,7 +221,7 @@ class Main(Base, ScienceCameraInterface):
                            ReadMode.IMAGE: 1}
 
         n_mode = conversion_dict[value]
-        self._set(csts.EXP_ROIMODE, n_mode)
+        self._set(WinSpecLib.EXP_ROIMODE, n_mode)
 
     def get_readout_speed(self):
         """  Get the current readout speed (in Hz)
@@ -274,14 +274,14 @@ class Main(Base, ScienceCameraInterface):
 
         @return (float) : exposure time in s
         """
-        return self._get(csts.EXP_EXPOSURE)
+        return self._get(WinSpecLib.EXP_EXPOSURE)
 
     def set_exposure_time(self, value):
         """ Set the exposure time in seconds
 
         @param (float) value: desired new exposure time
         """
-        self._set(csts.EXP_EXPOSURE, value)
+        self._set(WinSpecLib.EXP_EXPOSURE, value)
 
     def get_gain(self):
         """ Get the gain
@@ -353,14 +353,14 @@ class Main(Base, ScienceCameraInterface):
 
         @return (float): temperature (in Kelvin)
         """
-        return self._get(csts.EXP_ACTUAL_TEMP) + 273.15
+        return self._get(WinSpecLib.EXP_ACTUAL_TEMP) + 273.15
 
     def get_temperature_setpoint(self):
         """ Getter method for the temperature setpoint of the camera.
 
         @return (float): Current setpoint in Kelvin
         """
-        return self._get(csts.EXP_TEMPERATURE) + 273.15
+        return self._get(WinSpecLib.EXP_TEMPERATURE) + 273.15
 
     def set_temperature_setpoint(self, value):
         """ Setter method for the the temperature setpoint of the camera.
@@ -372,7 +372,7 @@ class Main(Base, ScienceCameraInterface):
             self.log.error('Temperature {} K is not in the validity range.'.format(value))
             return
         temperature = int(round(value - 273.15))
-        self._set(csts.EXP_TEMPERATURE, temperature)
+        self._set(WinSpecLib.EXP_TEMPERATURE, temperature)
 
     ##############################################################################
     #               Internal functions, for constraints preparation
@@ -382,8 +382,8 @@ class Main(Base, ScienceCameraInterface):
 
         @return tuple(int, int): number of pixel in width and height
         """
-        x = self._get(csts.EXP_XDIMDET)
-        y = self._get(csts.EXP_YDIMDET)
+        x = self._get(WinSpecLib.EXP_XDIMDET)
+        y = self._get(WinSpecLib.EXP_YDIMDET)
         return x, y
 
     def _get_pixel_size(self):
@@ -391,8 +391,8 @@ class Main(Base, ScienceCameraInterface):
 
         @return tuple(float, float): physical pixel size in meter
         """
-        x = self._get(csts.EXP_CELL_X_SIZE)
-        y = self._get(csts.EXP_CELL_Y_SIZE)
+        x = self._get(WinSpecLib.EXP_CELL_X_SIZE)
+        y = self._get(WinSpecLib.EXP_CELL_Y_SIZE)
         return x, y  #todo: check unit and EXP_X_GAP_SIZE
 
     def _get_temperature_range(self):
