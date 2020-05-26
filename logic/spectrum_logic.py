@@ -205,12 +205,8 @@ class SpectrumLogic(GenericLogic):
                            ": module state is currently locked. ")
             return
         self.module_state.lock()
-        if self._acquisition_mode == 'SINGLE_SCAN':
-            self.camera().start_acquisition()
-            self._status_timer.start(self._exposure_time)
-            return
-        self._loop_counter = self.number_of_loop
-        self.loop_acquisition()
+        self.camera().start_acquisition()
+        self._status_timer.start(self._exposure_time)
 
     def loop_acquisition(self):
         """ Method acquiring data by using the camera hardware method 'start_acquisition'. This method is connected
@@ -221,7 +217,7 @@ class SpectrumLogic(GenericLogic):
         SI check : yes
         """
         if self.camera().get_ready_state():
-            self._timer.start(self.exposure_time)
+            self._loop_timer.start(self.exposure_time)
             return
 
         self.camera().start_acquisition()
@@ -254,7 +250,7 @@ class SpectrumLogic(GenericLogic):
             return
 
         # Callback the loop function after delay time
-        self._timer.start(delay_time)
+        self._loop_timer.start(delay_time)
 
 
     def reject_cosmic(self, data):
