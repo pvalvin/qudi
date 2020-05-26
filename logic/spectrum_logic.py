@@ -206,7 +206,10 @@ class SpectrumLogic(GenericLogic):
             return
         self.module_state.lock()
         self.camera().start_acquisition()
-        self._status_timer.start(self._exposure_time)
+        while True:
+            if self.camera().get_ready_state():
+                self.module_state.unlock()
+                break
 
     def loop_acquisition(self):
         """ Method acquiring data by using the camera hardware method 'start_acquisition'. This method is connected
@@ -217,7 +220,7 @@ class SpectrumLogic(GenericLogic):
         SI check : yes
         """
         if self.camera().get_ready_state():
-            self._loop_timer.start(self.exposure_time)
+            self._timer.start(self.exposure_time)
             return
 
         self.camera().start_acquisition()
@@ -250,7 +253,7 @@ class SpectrumLogic(GenericLogic):
             return
 
         # Callback the loop function after delay time
-        self._loop_timer.start(delay_time)
+        self._timer.start(delay_time)
 
 
     def reject_cosmic(self, data):
@@ -286,6 +289,7 @@ class SpectrumLogic(GenericLogic):
         if self.camera().get_ready_state():
             self.module_state.unlock()
             self._acquired_data = self.get_acquired_data()
+            self._status_timer.timeout.stop()
             self.log.info("Acquisition finished : module state is 'idle' ")
 
     def stop_acquisition(self):
@@ -295,9 +299,9 @@ class SpectrumLogic(GenericLogic):
         Tested : yes
         SI check : yes
         """
-        self._timer.timeout.stop()
         self.camera().stop_acquisition()
         self.module_state.unlock()
+        self._status_timer.timeout.stop()
         self.log.info("Acquisition stopped : module state is 'idle' ")
 
     @property
