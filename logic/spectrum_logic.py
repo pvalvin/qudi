@@ -411,7 +411,7 @@ class SpectrumLogic(GenericLogic):
             return
         wavelength = float(wavelength)
         wavelength_max = self.spectro_constraints.gratings[self._grating_index].wavelength_max
-        if not 0 < wavelength < wavelength_max:
+        if not 0 <= wavelength < wavelength_max:
             self.log.error('Wavelength parameter is not correct : it must be in range {} to {} '
                            .format(0, wavelength_max))
             return
