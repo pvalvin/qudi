@@ -139,6 +139,7 @@ class SpectrumLogic(GenericLogic):
 
         # read mode :
         self._read_mode = self.camera().get_read_mode()
+        self.camera().set_read_mode(self._read_mode)
 
         # readout speed :
         if self._readout_speed == None:
@@ -204,12 +205,12 @@ class SpectrumLogic(GenericLogic):
             self.log.error("Module acquisition is still running, wait before launching a new acquisition "
                            ": module state is currently locked. ")
             return
-        self.module_state.lock()
-        self.camera().start_acquisition()
-        while True:
-            if self.camera().get_ready_state():
-                self.module_state.unlock()
-                break
+        if self._acquisition_mode == 'SINGLE_SCAN':
+            self.camera().start_acquisition()
+            self._status_timer.start(self._exposure_time)
+            return
+        self._loop_counter = self.number_of_loop
+        self.loop_acquisition()
 
     def loop_acquisition(self):
         """ Method acquiring data by using the camera hardware method 'start_acquisition'. This method is connected
@@ -291,6 +292,9 @@ class SpectrumLogic(GenericLogic):
             self._acquired_data = self.get_acquired_data()
             self._status_timer.timeout.stop()
             self.log.info("Acquisition finished : module state is 'idle' ")
+
+    def get_ready_state(self):
+        return self.camera().get_ready_state()
 
     def stop_acquisition(self):
         """Method calling the stop acquisition method from the camera hardware module and changing the
@@ -376,7 +380,7 @@ class SpectrumLogic(GenericLogic):
         grating_number = int(grating_index)
         if grating_index == self._grating_index:
             return
-        number_of_gratings = self.spectro_constraints._get_number_gratings()
+        number_of_gratings = len(self.spectro_constraints.gratings)
         if not 0 <= grating_index < number_of_gratings:
             self.log.error('Grating number parameter is not correct : it must be in range 0 to {} '
                            .format(number_of_gratings - 1))
@@ -397,7 +401,7 @@ class SpectrumLogic(GenericLogic):
         Tested : yes
         SI check : yes
         """
-        return self._center_wavelength
+        return self._center_wavelength + self._wavelength_calibration
 
     @center_wavelength.setter
     def center_wavelength(self, wavelength):
@@ -413,7 +417,7 @@ class SpectrumLogic(GenericLogic):
             self.log.error("Acquisition process is currently running : you can't change this parameter"
                            " until the acquisition is completely stopped ")
             return
-        wavelength = float(wavelength)
+        wavelength = float(wavelength - self._wavelength_calibration)
         wavelength_max = self.spectro_constraints.gratings[self._grating_index].wavelength_max
         if not 0 <= wavelength < wavelength_max:
             self.log.error('Wavelength parameter is not correct : it must be in range {} to {} '
@@ -439,9 +443,8 @@ class SpectrumLogic(GenericLogic):
         focal_tilt = self.spectro_constraints.focal_tilt
         grating = self.spectro_constraints.gratings[self._grating_index]
         ruling = grating.ruling
-        blaze = grating.blaze
         pixels_vector = np.arange(-image_width//2, image_width//2 - image_width%2)*pixel_width
-        wavelength_spectrum = pixels_vector/np.sqrt(focal_length**2+pixels_vector**2)/ruling + self._center_wavelength
+        wavelength_spectrum = pixels_vector/np.sqrt(focal_length**2+pixels_vector**2)/ruling + self.center_wavelength
         return wavelength_spectrum
 
     @property
@@ -464,7 +467,6 @@ class SpectrumLogic(GenericLogic):
             self.log.error("Acquisition process is currently running : you can't change this parameter"
                            " until the acquisition is completely stopped ")
             return
-        self.center_wavelength = self._center_wavelength - wavelength_calibration
         self._wavelength_calibration = wavelength_calibration
 
 
@@ -879,8 +881,8 @@ class SpectrumLogic(GenericLogic):
             self.log.error("Acquisition process is currently running : you can't change this parameter"
                            " until the acquisition is completely stopped ")
             return
-        binning = list(image_advanced_area)
-        if len(binning) != 4:
+        image_advanced_area = list(image_advanced_area)
+        if len(image_advanced_area) != 4:
             self.log.error("Image area parameter must be a tuple or list of 4 elements like this [horizontal start, "
                            "horizontal end, vertical start, vertical end] ")
             return
@@ -896,13 +898,10 @@ class SpectrumLogic(GenericLogic):
             return
         hbin = self._image_advanced.horizontal_binning
         vbin = self._image_advanced.vertical_binning
-        if 0 < hbin*(image_advanced_area[1]-image_advanced_area[0]) < width:
-            self.log.error("Image area horizontal parameter is out of range : "
-                           "the advanced image is too big ")
-            return
-        if 0 < vbin*(image_advanced_area[3]-image_advanced_area[2]) < height:
-            self.log.error("Image area vertical parameter is out of range : "
-                           "the advanced image is too big ")
+        if not (image_advanced_area[1]-image_advanced_area[0]+1)//hbin==0:
+            image_advanced_area[1] += (image_advanced_area[1] - image_advanced_area[0] + 1) // hbin*hbin
+        if not (image_advanced_area[3]-image_advanced_area[2]+1)//vbin==0:
+            image_advanced_area[3] += (image_advanced_area[3] - image_advanced_area[2] + 1) // vbin * vbin
             return
         self._image_advanced.horizontal_start = int(image_advanced_area[0])
         self._image_advanced.horizontal_end = int(image_advanced_area[1])

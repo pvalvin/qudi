@@ -188,8 +188,8 @@ class Main(Base, ScienceCameraInterface):
 
         self._active_tracks = [(0, self._constraints.height-1)]
         self._image_advanced_parameters = ImageAdvancedParameters()
-        self._image_advanced_parameters.horizontal_end = self._constraints.width
-        self._image_advanced_parameters.vertical_end = self._constraints.height
+        self._image_advanced_parameters.horizontal_end = self._constraints.width-1
+        self._image_advanced_parameters.vertical_end = self._constraints.height-1
 
     def on_deactivate(self):
         """ De-initialisation performed during deactivation of the module. """
@@ -301,11 +301,11 @@ class Main(Base, ScienceCameraInterface):
             height = self.get_constraints().height
         elif self.get_read_mode() == ReadMode.IMAGE_ADVANCED:
             params = self.get_image_advanced_parameters()
-            height = (params.vertical_end - params.vertical_start)/params.vertical_binning
-            width = (params.horizontal_end - params.horizontal_start)/params.horizontal_binning
+            height = int((params.vertical_end - params.vertical_start+1)/params.vertical_binning)
+            width = int((params.horizontal_end - params.horizontal_start+1)/params.horizontal_binning)
 
         dimension = int(width * height)
-        c_image_array = ct.c_int * dimension
+        c_image_array = ct.c_int32 * dimension
         c_image = c_image_array()
         status_code = self._dll.GetAcquiredData(ct.pointer(c_image), dimension)
         if status_code != OK_CODE:
@@ -314,7 +314,7 @@ class Main(Base, ScienceCameraInterface):
         if self.get_read_mode() == ReadMode.FVB:
             return np.array(c_image)
         else:
-            return np.reshape(np.array(c_image), (width, height)).transpose()
+            return np.reshape(np.array(c_image), (height, width))
 
     ##############################################################################
     #                           Read mode functions
@@ -428,8 +428,8 @@ class Main(Base, ScienceCameraInterface):
         elif self.get_read_mode() == ReadMode.IMAGE_ADVANCED:
             params = self._image_advanced_parameters
             status_code = self._dll.SetImage(int(params.horizontal_binning),  int(params.vertical_binning),
-                                             int(params.horizontal_start), int(params.horizontal_end),
-                                             int(params.vertical_start), int(params.vertical_end))
+                                             int(params.horizontal_start+1), int(params.horizontal_end+1),
+                                             int(params.vertical_start+1), int(params.vertical_end+1))
             self._check(status_code)
 
     ##############################################################################
