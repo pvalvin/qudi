@@ -116,7 +116,7 @@ class CameraGUI(GUIBase):
         # starting the physical measurement
         self.sigVideoStart.connect(self._logic.start_loop)
         self.sigVideoStop.connect(self._logic.stop_loop)
-        self.sigImageStart.connect(self._logic.start_single_acquistion)
+        self.sigImageStart.connect(self._logic.start_single_acquisition)
 
         # connect Settings action under Options menu
         self._mw.actionSettings.triggered.connect(self.menu_settings)
