@@ -180,7 +180,7 @@ class SpectrumLogic(GenericLogic):
         # QTimer for asynchronous execution :
         self._loop_timer = QtCore.QTimer()
         self._loop_timer.setSingleShot(True)
-        self._loop_timer.timeout.connect(self.loop_acquisition)
+        self._loop_timer.timeout.connect(self._loop_acquisition)
         self._loop_counter = 0
 
         self._status_timer = QtCore.QTimer()
@@ -204,14 +204,16 @@ class SpectrumLogic(GenericLogic):
             self.log.error("Module acquisition is still running, wait before launching a new acquisition "
                            ": module state is currently locked. ")
             return
-        self.module_state.lock()
-        self.camera().start_acquisition()
-        while True:
-            if self.camera().get_ready_state():
-                self.module_state.unlock()
-                break
+        if self.read_mode == 'SINGLE_SCAN':
+            self.module_state.lock()
+            self.camera().start_acquisition()
+            self._status_timer.start(self.exposure_time)
+        else:
+            self.module_state.lock()
+            self._loop_counter = self.number_of_loop
+            self._loop_acquisition()
 
-    def loop_acquisition(self):
+    def _loop_acquisition(self):
         """ Method acquiring data by using the camera hardware method 'start_acquisition'. This method is connected
         to a timer signal : after timer start this slot is called with a period of a time delay. After a certain
         number of call this method can stop the timer if not in 'LIVE' acquisition.
@@ -224,7 +226,7 @@ class SpectrumLogic(GenericLogic):
             return
 
         self.camera().start_acquisition()
-        self.number_of_loop -= 1
+        self._loop_counter -= 1
 
         # Get acquired data : update scan if 'LIVE' or concatenate scan if 'MULTI'
         if self._acquisition_mode == 'LIVE_SCAN' or self._loop_counter == self.number_of_loop-1:
