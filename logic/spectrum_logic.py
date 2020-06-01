@@ -37,6 +37,8 @@ from interface.grating_spectrometer_interface import PortType
 from interface.science_camera_interface import ReadMode, ShutterState
 from hardware.camera.andor_camera import TriggerMode
 
+from scipy import optimize
+
 
 from datetime import date
 
@@ -205,13 +207,9 @@ class SpectrumLogic(GenericLogic):
             self.log.error("Module acquisition is still running, wait before launching a new acquisition "
                            ": module state is currently locked. ")
             return
-        if self.read_mode == 'SINGLE_SCAN':
-            self.module_state.lock()
-            self.camera().start_acquisition()
-            self._status_timer.start(self.exposure_time)
-            self.module_state.lock()
-            self._loop_counter = self.number_of_loop
-            self._loop_acquisition()
+        if self._read_mode == 'IMAGE_ADVANCED':
+            self.camera().set_image_advanced_parameters(self._image_advanced)
+        self.camera().start_acquisition()
 
     def _loop_acquisition(self):
         """ Method acquiring data by using the camera hardware method 'start_acquisition'. This method is connected
@@ -222,7 +220,7 @@ class SpectrumLogic(GenericLogic):
         SI check : yes
         """
         if self.camera().get_ready_state():
-            self._timer.start(self.exposure_time)
+            self._status_timer.start(self.exposure_time)
             return
 
         self.camera().start_acquisition()
@@ -255,7 +253,7 @@ class SpectrumLogic(GenericLogic):
             return
 
         # Callback the loop function after delay time
-        self._timer.start(delay_time)
+        self._status_timer.start(delay_time)
 
 
     def reject_cosmic(self, data):
@@ -418,7 +416,11 @@ class SpectrumLogic(GenericLogic):
             self.log.error("Acquisition process is currently running : you can't change this parameter"
                            " until the acquisition is completely stopped ")
             return
-        wavelength = float(wavelength - self._wavelength_calibration)
+        wavelength = float(wavelength)
+        if wavelength != 0:
+            wavelength = float(wavelength - self._wavelength_calibration)
+        else:
+            wavelength = float(wavelength)
         wavelength_max = self.spectro_constraints.gratings[self._grating_index].wavelength_max
         if not 0 <= wavelength < wavelength_max:
             self.log.error('Wavelength parameter is not correct : it must be in range {} to {} '
@@ -442,11 +444,23 @@ class SpectrumLogic(GenericLogic):
         focal_length = self.spectro_constraints.focal_length
         angular_dev = self.spectro_constraints.angular_deviation
         focal_tilt = self.spectro_constraints.focal_tilt
-        grating = self.spectro_constraints.gratings[self._grating_index]
-        ruling = grating.ruling
-        pixels_vector = np.arange(-image_width//2, image_width//2 - image_width%2)*pixel_width
-        wavelength_spectrum = pixels_vector/np.sqrt(focal_length**2+pixels_vector**2)/ruling + self.center_wavelength
-        return wavelength_spectrum
+        grating = self.spectro_constraints.gratings[self.grating_index]
+        lam_c = self.center_wavelength
+
+        A = np.cos(angular_dev) ** 2
+        B = np.cos(angular_dev) * np.sin(angular_dev)
+        trans_eq = lambda alpha : A*np.sin(alpha)*np.cos(alpha) - B*np.sin(alpha)**2 -lam_c*grating.ruling/2
+        alpha = optimize.newton(trans_eq, 0) + angular_dev
+
+        pixels_vector = np.arange(-image_width // 2, image_width // 2 - image_width % 2) * pixel_width
+        theta = np.arctan(pixels_vector * np.cos(focal_tilt) / focal_length)
+
+        effective_rulling = grating.ruling / np.cos(angular_dev + alpha)
+        wavelength_spectrum = 1 / effective_rulling * (np.sin(angular_dev + alpha + theta) - np.sin(angular_dev + alpha)) + lam_c
+
+        self.spectrometer()._set_pixel_width(self.camera_constraints.pixel_size_width)
+        self.spectrometer()._set_number_of_pixels(self.camera_constraints.width)
+        return self.spectrometer()._get_calibration() + self._wavelength_calibration
 
     @property
     def wavelength_calibration(self):
@@ -899,11 +913,10 @@ class SpectrumLogic(GenericLogic):
             return
         hbin = self._image_advanced.horizontal_binning
         vbin = self._image_advanced.vertical_binning
-        if not (image_advanced_area[1]-image_advanced_area[0]+1)//hbin==0:
-            image_advanced_area[1] += (image_advanced_area[1] - image_advanced_area[0] + 1) // hbin*hbin
-        if not (image_advanced_area[3]-image_advanced_area[2]+1)//vbin==0:
-            image_advanced_area[3] += (image_advanced_area[3] - image_advanced_area[2] + 1) // vbin * vbin
-            return
+        if not (image_advanced_area[1]-image_advanced_area[0]+1)%hbin==0:
+            image_advanced_area[1] = (image_advanced_area[1] - image_advanced_area[0] + 1) // hbin * hbin + image_advanced_area[0]
+        if not (image_advanced_area[3]-image_advanced_area[2]+1)%vbin==0:
+            image_advanced_area[3] = (image_advanced_area[3] - image_advanced_area[2] + 1) // vbin * vbin + image_advanced_area[2]
         self._image_advanced.horizontal_start = int(image_advanced_area[0])
         self._image_advanced.horizontal_end = int(image_advanced_area[1])
         self._image_advanced.vertical_start = int(image_advanced_area[2])
