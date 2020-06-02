@@ -122,7 +122,7 @@ class Main(Base, ScienceCameraInterface):
     _dll_location = ConfigOption('dll_location', missing='error')
 
     _start_cooler_on_activate = ConfigOption('start_cooler_on_activate', True)
-    _default_temperature_degree = ConfigOption('default_temperature', -90)  # Temperature in °C (not Kelvin !)
+    _default_temperature_degree = ConfigOption('default_temperature', -80)  # Temperature in °C (not Kelvin !)
     _default_trigger_mode = ConfigOption('default_trigger_mode', 'INTERNAL')
     _has_external_shutter = ConfigOption('has_external_shutter', False)
 

@@ -39,8 +39,7 @@ from hardware.camera.andor_camera import TriggerMode
 
 from scipy import optimize
 
-
-from datetime import date
+import time
 
 class AcquisitionMode(Enum):
     """ Class defining the possible read modes of the camera
@@ -84,6 +83,11 @@ class SpectrumLogic(GenericLogic):
 
     # cosmic rejection coeff :
     _coeff_rej_cosmic = StatusVar('coeff_cosmic_rejection', 2.2)
+
+    timer = None
+
+    sigStart = QtCore.Signal()
+    sigStop = QtCore.Signal()
 
     ##############################################################################
     #                            Basic functions
@@ -172,7 +176,7 @@ class SpectrumLogic(GenericLogic):
 
         # shutter state :
         if self.camera_constraints.has_shutter:
-            self._shutter_state = self.camera().get_shutter_mode()
+            self._shutter_state = self.camera().get_shutter_state()
 
         # temperature setpoint :
         if self._temperature_setpoint == None:
@@ -181,13 +185,14 @@ class SpectrumLogic(GenericLogic):
             self.camera().set_temperature_setpoint(self._temperature_setpoint)
 
         # QTimer for asynchronous execution :
-        self._loop_timer = QtCore.QTimer()
-        self._loop_timer.setSingleShot(True)
-        self._loop_timer.timeout.connect(self._loop_acquisition)
-        self._loop_counter = 0
 
-        self._status_timer = QtCore.QTimer()
-        self._status_timer.timeout.connect(self._check_status)
+        self._loop_counter = 0
+        self.timer = QtCore.QTimer()
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self._check_status)
+
+        self.sigStart.connect(self._start_acquisition)
+        self.sigStop.connect(self._stop_acquisition)
 
     def on_deactivate(self):
         """ Deinitialisation performed during deactivation of the module.
@@ -195,13 +200,21 @@ class SpectrumLogic(GenericLogic):
         if self.module_state() != 'idle' and self.module_state() != 'deactivated':
             self.stop_acquisition()
             pass
+        self.sigStart.disconnect()
 
     ##############################################################################
     #                            Acquisition functions
     ##############################################################################
 
-    def start_acquisition(self):
-        """ Start acquisition by launching the timer signal calling the 'acquire_data' function.
+    def wait_for_acquisition(self):
+        """ Simple 'single acquisition' which can be used in any acquisition mode waiting the end of the
+        acquisition before returning the acquired value.
+
+        Note : this function must be used only for simple task since the module is executed in a synchronous way.
+        The acquired data are not stored in the acquired data attribute since the use of this function must be
+        exceptional !
+
+        @return : (ndarray) acquired data
         """
         if self.module_state() == 'locked':
             self.log.error("Module acquisition is still running, wait before launching a new acquisition "
@@ -209,51 +222,103 @@ class SpectrumLogic(GenericLogic):
             return
         if self._read_mode == 'IMAGE_ADVANCED':
             self.camera().set_image_advanced_parameters(self._image_advanced)
+        if self._read_mode == 'MULTIPLE_TRACKS':
+            self.camera().set_active_tracks(self._active_tracks)
+
+        self.module_state.lock()
         self.camera().start_acquisition()
+        while not self.get_ready_state():
+            time.sleep(self._exposure_time)
+        self.module_state.unlock()
+        return self.get_acquired_data()
 
-    def _loop_acquisition(self):
-        """ Method acquiring data by using the camera hardware method 'start_acquisition'. This method is connected
-        to a timer signal : after timer start this slot is called with a period of a time delay. After a certain
-        number of call this method can stop the timer if not in 'LIVE' acquisition.
-
-        Tested : yes
-        SI check : yes
+    def start_acquisition(self):
+        """ Start acquisition method started by the user, allowing execution by the logic module thread by emmiting
+        start signal connected to the private acquisition method.
         """
-        if self.camera().get_ready_state():
-            self._status_timer.start(self.exposure_time)
+        self.sigStart.emit()
+
+    def _start_acquisition(self):
+        """ Start acquisition method initializing the acquisitions constants and calling the acquisition method
+        """
+        if self.module_state() == 'locked':
+            self.log.error("Module acquisition is still running, wait before launching a new acquisition "
+                           ": module state is currently locked. ")
             return
 
-        self.camera().start_acquisition()
-        self._loop_counter -= 1
+        if self._read_mode == 'IMAGE_ADVANCED':
+            self.camera().set_image_advanced_parameters(self._image_advanced)
+        if self._read_mode == 'MULTIPLE_TRACKS':
+            self.camera().set_active_tracks(self._active_tracks)
 
-        # Get acquired data : update scan if 'LIVE' or concatenate scan if 'MULTI'
-        if self._acquisition_mode == 'LIVE_SCAN' or self._loop_counter == self.number_of_loop-1:
-            self._acquired_data = self.get_acquired_data()
-        else:
-            self._acquired_data = np.append(self._acquired_data, self.get_acquired_data())
-
-        # Accumulation mode starting with 'ACC' : if accumulation finished apply cosmic rejection from this last data
+        self._acquired_data = []
+        self._loop_counter = 1
+        if self._acquisition_mode[-10:] == 'MULTI_SCAN':
+            self._loop_counter *= self._number_of_scan
         if self._acquisition_mode[:3] == 'ACC':
-            if self._loop_counter%self._number_accumulated_scan == 0 and self._loop_counter!=self.number_of_loop:
-                data = self._acquired_data[-self._number_accumulated_scan]
-                filtered_data = self.reject_cosmic(data)
-                np.delete(self._acquired_data, np.s_[-self._number_accumulated_scan], axis=0)
-                self._acquired_data = np.append(self._acquired_data, filtered_data)
-                delay_time = self._scan_delay
-            else:
-                delay_time = self._accumulation_delay
+            self._loop_counter *= self._number_accumulated_scan
+        self._acquisition()
+
+    def get_ready_state(self):
+        """ Getter method returning if the camera hardware is acquiring or not
+
+        @return: (bool) camera hardware acquiring ?
+        """
+        return self.camera().get_ready_state()
+
+    def _acquisition(self):
+        """Acquisition method starting hardware acquisition and emitting Qtimer signal connected to check status method
+        """
+        self._loop_counter -= 1
+        if self._acquisition_mode == 'SINGLE_SCAN':
+            tempo = 0
+        if self._acquisition_mode[:3] == 'ACC' and self._loop_counter%self._number_accumulated_scan != 0:
+            tempo = self._accumulation_delay
         else:
-            delay_time = self._accumulation_delay
+            tempo = self._scan_delay
+        self.module_state.lock()
+        self.camera().start_acquisition()
+        self.timer.start((tempo + self._exposure_time)*1e3) #Qtimer start() method in ms
 
-        # Stop acquisition if not live acquistion
-        if self._acquisition_mode[-9:] != 'LIVE_SCAN' and self._loop_counter==0:
+    def _check_status(self):
+        """ Method / Slot used by the acquisition call by Qtimer signal to check if the acquisition is complete
+        and, then, unlock the module and acquire data
+        """
+        if self.get_ready_state():
+
+            if self._acquisition_mode == 'SINGLE_SCAN':
+                self._acquired_data = self.get_acquired_data()
+                self.module_state.unlock()
+                self.log.info("Acquisition finished : module state is 'idle' ")
+                return
+
+            elif self._acquisition_mode == 'LIVE_SCAN':
+                self._loop_counter += 1
+                self._acquired_data = self.get_acquired_data()
+                self.module_state.unlock()
+                self._acquisition()
+                return
+
+            else:
+
+                self._acquired_data.append(self.get_acquired_data())
+
+                if self._acquisition_mode[:3] == 'ACC' and self._loop_counter%self._number_accumulated_scan == 0:
+                    data = self._acquired_data[-self._number_accumulated_scan-1:]
+                    filtered_data = self.reject_cosmic(data)
+                    np.delete(np.array(self._acquired_data), np.s_[-self._number_accumulated_scan-1:], axis=0)
+                    self._acquired_data.append( filtered_data)
+
+                if self._loop_counter >= 0:
+                    self.module_state.unlock()
+                    self._acquisition()
+                    return
+
             self.module_state.unlock()
-            self._acquired_data = self.get_acquired_data()
             self.log.info("Acquisition finished : module state is 'idle' ")
-            return
 
-        # Callback the loop function after delay time
-        self._status_timer.start(delay_time)
+        else:
+            self.timer.start(self._exposure_time*1e3) #Qtimer start() method in ms
 
 
     def reject_cosmic(self, data):
@@ -265,7 +330,7 @@ class SpectrumLogic(GenericLogic):
         Tested : yes
         SI check : yes
         """
-        if len(data)<self._number_accumulated_scan:
+        if len(data) < self._number_accumulated_scan:
             self.log.error("Cosmic rejection impossible : the number of scan in the data parameter is less than the"
                            " number of accumulated scan selected. Choose a different number of accumulated scan or"
                            " make more scan. ")
@@ -278,45 +343,33 @@ class SpectrumLogic(GenericLogic):
             clean_data = np.ma.masked_array([np.ma.masked_outside(pixel, mask_min[i], mask_max[i])
                                              for i,pixel in enumerate(data.T)]).T
             return clean_data
-        clean_data = np.transpose(np.empty(np.shape(data)), (1,2,0))
-        for i,track in enumerate(np.transpose(data, (1,2,0))):
+        clean_data = np.transpose(np.empty(np.shape(data)), (1, 2, 0))
+        for i,track in enumerate(np.transpose(data, (1, 2, 0))):
             clean_track = np.ma.masked_array([np.ma.masked_outside(pixel, mask_min[i, j], mask_max[i, j])
                                              for j,pixel in enumerate(track)])
             clean_data = np.append(clean_data, clean_track)
         return np.transpose(clean_data,(2,0,1))
 
-    def _check_status(self):
-        if self.camera().get_ready_state():
-            self.module_state.unlock()
-            self._acquired_data = self.get_acquired_data()
-            self._status_timer.timeout.stop()
-            self.log.info("Acquisition finished : module state is 'idle' ")
-
-    def get_ready_state(self):
-        return self.camera().get_ready_state()
-
     def stop_acquisition(self):
-        """Method calling the stop acquisition method from the camera hardware module and changing the
+        """Method calling the abort acquisition method from the camera hardware module and changing the
         logic module state to 'unlocked'.
 
         Tested : yes
         SI check : yes
         """
-        self.camera().stop_acquisition()
-        self.module_state.unlock()
-        self._status_timer.timeout.stop()
-        self.log.info("Acquisition stopped : module state is 'idle' ")
+        self.sigStop.emit()
 
-    @property
-    def number_of_loop(self):
-        """This function calculate the number of loop to do by the acquisition
+    def _stop_acquisition(self):
+        """Method calling the abort acquisition method from the camera hardware module and changing the
+        logic module state to 'unlocked'.
+
+        Tested : yes
+        SI check : yes
         """
-        number_of_loop = 1
-        if self._acquisition_mode[-10:] == 'MULTI_SCAN':
-            number_of_loop *= self._number_of_scan
-        elif self._acquisition_mode[:3] == 'ACC':
-            number_of_loop *= self._number_accumulated_scan
-        return number_of_loop
+        self.timer.stop()
+        self.module_state.unlock()
+        self.camera().abort_acquisition()
+        self.log.info("Acquisition stopped : module state is 'idle' ")
 
     @property
     def acquired_data(self):
@@ -332,6 +385,7 @@ class SpectrumLogic(GenericLogic):
 
     def save_acquired_data(self, filepath=None, filename=None):
         parameters = {"camera_gain" : self._camera_gain,
+                      "readout_speed": self._readout_speed,
                       "exposure_time" : self._exposure_time,
                       "scan_delay" : self._scan_delay,
                       "accumulation_delay" : self._accumulation_delay,
@@ -812,10 +866,8 @@ class SpectrumLogic(GenericLogic):
                            " until the acquisition is completely stopped ")
             return
         readout_speed = float(readout_speed)
-        if not readout_speed in self.camera_constraints.readout_speeds:
-            self.log.error("Readout speed parameter do not match with any of the available readout "
-                           "speeds of the camera ")
-            return
+        index = (np.abs(np.array(self.camera_constraints.readout_speeds)-readout_speed)).argmin()
+        readout_speed = self.camera_constraints.readout_speeds[index]
         if readout_speed == self._readout_speed:
             return
         self.camera().set_readout_speed(readout_speed)
@@ -855,8 +907,6 @@ class SpectrumLogic(GenericLogic):
             return
         if not len(active_tracks)%2 == 0:
             active_tracks = np.append(active_tracks, image_height-1)
-        if active_tracks == self._active_tracks:
-            return
         active_tracks = [(active_tracks[i], active_tracks[i+1]) for i in range(0, len(active_tracks), 2)]
         self.camera().set_active_tracks(active_tracks)
         self._active_tracks = self.camera().get_active_tracks()
@@ -1219,7 +1269,7 @@ class SpectrumLogic(GenericLogic):
     def shutter_state(self):
         """Getter method returning the shutter state.
 
-        @return: (str) shutter mode
+        @return: (str) shutter state
 
         Tested : yes
         SI check : yes
@@ -1233,7 +1283,7 @@ class SpectrumLogic(GenericLogic):
     def shutter_state(self, shutter_state):
         """Setter method setting the shutter state.
 
-        @param shutter_mode: (str) shutter mode
+        @param shutter_state: (str) shutter state
 
         Tested : yes
         SI check : yes
