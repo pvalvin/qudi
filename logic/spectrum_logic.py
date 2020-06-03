@@ -160,8 +160,8 @@ class SpectrumLogic(GenericLogic):
 
         self._sigStart.connect(self._start_acquisition)
         self._sigCheckStatus.connect(self._check_status, QtCore.Qt.QueuedConnection)
-        self._loop_timer = QtCore.Qtimer()
-        self._loop_counter.setSingleShot(True)
+        self._loop_timer = QtCore.QTimer()
+        self._loop_timer.setSingleShot(True)
         self._loop_timer.timeout.connect(self._acquisition_loop)
 
     def on_deactivate(self):
