@@ -31,7 +31,6 @@ from core.util.mutex import Mutex
 from core.util.network import netobtain
 from logic.generic_logic import GenericLogic
 from core.configoption import ConfigOption
-from logic.save_logic import SaveLogic
 
 from interface.grating_spectrometer_interface import PortType
 from interface.science_camera_interface import ReadMode, ShutterState
@@ -41,8 +40,9 @@ from scipy import optimize
 
 import time
 
+
 class AcquisitionMode(Enum):
-    """ Class defining the possible read modes of the camera
+    """ Internal class defining the possible read modes of the camera
 
     SINGLE_SCAN : single scan acquisition
     MULTI_SCAN : multiple scan acquisition
@@ -57,9 +57,9 @@ class AcquisitionMode(Enum):
     ACC_SINGLE_SCAN = 3
     ACC_MULTI_SCAN = 4
 
+
 class SpectrumLogic(GenericLogic):
-    """This logic module gathers data from the spectrometer.
-    """
+    """ This logic module handle the spectrometer gratings and camera """
 
     # declare connectors
     spectrometer = Connector(interface='GratingSpectrometerInterface')
@@ -84,10 +84,8 @@ class SpectrumLogic(GenericLogic):
     # cosmic rejection coeff :
     _coeff_rej_cosmic = StatusVar('coeff_cosmic_rejection', 2.2)
 
-    timer = None
-
-    sigStart = QtCore.Signal()
-    sigStop = QtCore.Signal()
+    _sigStart = QtCore.Signal()
+    _sigCheckStatus = QtCore.Signal()
 
     ##############################################################################
     #                            Basic functions
@@ -101,173 +99,132 @@ class SpectrumLogic(GenericLogic):
         super().__init__(**kwargs)
         self.threadlock = Mutex()
 
+        # Public attributes
+        self.spectro_constraints = None
+        self.camera_constraints = None
+
+        # Private attributes
+        self._grating_index = None
+        self._center_wavelength = None
+        self._input_ports = None
+        self._output_ports = None
+        self._input_port = None
+        self._output_port = None
+        self._input_slit_width = None
+        self._output_slit_width = None
+        self._read_mode = None
+        self._trigger_mode = None
+        self._active_tracks = None
+        self._image_advanced = None
+        self._shutter_state = None
+        self._loop_counter = None
+        self._timer = None
+
     def on_activate(self):
-        """ Initialisation performed during activation of the module.
-        """
+        """ Initialisation performed during activation of the module. """
 
-        # save logic module :
-        self._save_logic = self.savelogic()
-
-        # hardware constraints :
         self.spectro_constraints = self.spectrometer().get_constraints()
         self.camera_constraints = self.camera().get_constraints()
 
-        # gratings :
-        self._grating_index = self.spectrometer().get_grating_index()
-
-        # wavelength :
-        self._center_wavelength = self.spectrometer().get_wavelength()
-
-        # spectro configurations :
         ports = self.spectro_constraints.ports
         self._output_ports = [port for port in ports if port.type == PortType.OUTPUT_SIDE or
                               port.type == PortType.OUTPUT_FRONT]
         self._input_ports = [port for port in ports if port.type == PortType.INPUT_SIDE or
-                              port.type == PortType.INPUT_FRONT]
+                             port.type == PortType.INPUT_FRONT]
 
-        # Ports config :
-        if len(self._input_ports) < 2:
-            self._input_port = self._input_ports[0].type
-        else:
-            self._input_port = self.spectrometer().get_input_port()
-
-        if len(self._output_ports) < 2:
-            self._output_port = self._output_ports[0].type
-        else:
-            self._output_port = self.spectrometer().get_output_port()
-
-        # Slit width config :
+        # Get current physical state
+        self._grating_index = self.spectrometer().get_grating_index()
+        self._center_wavelength = self.spectrometer().get_wavelength()
+        self._input_port = self.spectrometer().get_input_port()
+        self._output_port = self.spectrometer().get_output_port()
         self._input_slit_width = [self.spectrometer().get_slit_width(port.type) if port.is_motorized else None
                                   for port in self._input_ports]
-
         self._output_slit_width = [self.spectrometer().get_slit_width(port.type) if port.is_motorized else None
                                    for port in self._output_ports]
 
-        # read mode :
+        # Get camera state
         self._read_mode = self.camera().get_read_mode()
-        self.camera().set_read_mode(self._read_mode)
-
-        # readout speed :
-        if self._readout_speed == None:
-            self._readout_speed = self.camera().get_readout_speed()
-        else:
-            self.camera().set_readout_speed(self._readout_speed)
-
-        # active tracks :
-        self._active_tracks = self.camera().get_active_tracks()
-
-        # image advanced :
-        self._image_advanced = self.camera().get_image_advanced_parameters()
-
-        # internal gain :
-        if self._camera_gain==None:
-            self._camera_gain = self.camera().get_gain()
-        else:
-            self.camera().set_gain(self._camera_gain)
-
-        # exposure time :
-        if self._exposure_time==None:
-            self._exposure_time = self.camera().get_exposure_time()
-        else:
-            self.camera().set_exposure_time(self._exposure_time)
-
-        # trigger mode :
         self._trigger_mode = self.camera().get_trigger_mode()
 
-        # shutter state :
+        # Try status variable value or take current hardware value if status variable is None
+        self.readout_speed = self._readout_speed or self.camera().get_readout_speed()
+        self.camera_gain = self._camera_gain or self.camera().get_gain()
+        self.exposure_time = self._exposure_time or self.camera().get_exposure_time()
+        if self.camera_constraints.has_cooler:
+            self.temperature_setpoint = self._temperature_setpoint or self.camera().get_temperature_setpoint()
+
+        # Todo: use status variable
+        self._active_tracks = self.camera().get_active_tracks()
+        self._image_advanced = self.camera().get_image_advanced_parameters()
+
         if self.camera_constraints.has_shutter:
             self._shutter_state = self.camera().get_shutter_state()
 
-        # temperature setpoint :
-        if self._temperature_setpoint == None:
-            self._temperature_setpoint = self.camera().get_temperature_setpoint()
-        if self.camera_constraints.has_cooler:
-            self.camera().set_temperature_setpoint(self._temperature_setpoint)
-
         # QTimer for asynchronous execution :
-
         self._loop_counter = 0
-        self.timer = QtCore.QTimer()
-        self.timer.setSingleShot(True)
-        self.timer.timeout.connect(self._check_status)
 
-        self.sigStart.connect(self._start_acquisition)
-        self.sigStop.connect(self._stop_acquisition)
+        self._sigStart.connect(self._start_acquisition)
+        self._sigCheckStatus.connect(self._check_status, QtCore.Qt.QueuedConnection)
 
     def on_deactivate(self):
-        """ Deinitialisation performed during deactivation of the module.
-        """
-        if self.module_state() != 'idle' and self.module_state() != 'deactivated':
+        """ Deinitialisation performed during deactivation of the module. """
+        if self.module_state() != 'idle':
             self.stop_acquisition()
-            pass
-        self.sigStart.disconnect()
+            self.log.warning('Stopping running acquisition du to module deactivation.')
+
+        self._sigStart.disconnect()
+        self._sigCheckStatus.disconnect()
 
     ##############################################################################
     #                            Acquisition functions
     ##############################################################################
 
-    def wait_for_acquisition(self):
-        """ Simple 'single acquisition' which can be used in any acquisition mode waiting the end of the
-        acquisition before returning the acquired value.
+    def take_acquisition(self):
+        """ Method use by other modules and script to start acquisition, wait for the end and return the result
 
-        Note : this function must be used only for simple task since the module is executed in a synchronous way.
-        The acquired data are not stored in the acquired data attribute since the use of this function must be
-        exceptional !
+        @return (np.ndarray):  The newly acquired data
 
-        @return : (ndarray) acquired data
         """
         if self.module_state() == 'locked':
-            self.log.error("Module acquisition is still running, wait before launching a new acquisition "
-                           ": module state is currently locked. ")
-            return
-        if self._read_mode == 'IMAGE_ADVANCED':
-            self.camera().set_image_advanced_parameters(self._image_advanced)
-        if self._read_mode == 'MULTIPLE_TRACKS':
-            self.camera().set_active_tracks(self._active_tracks)
-
-        self.module_state.lock()
-        self.camera().start_acquisition()
-        while not self.get_ready_state():
-            time.sleep(self._exposure_time)
-        self.module_state.unlock()
+            self.log.error("Module acquisition is still running, module state is currently locked.")
+        self.start_acquisition()
+        while self.module_state() != 'idle':
+            time.sleep(0.1)
         return self.get_acquired_data()
 
     def start_acquisition(self):
-        """ Start acquisition method started by the user, allowing execution by the logic module thread by emmiting
-        start signal connected to the private acquisition method.
-        """
-        self.sigStart.emit()
+        """ Start acquisition in the module's thread and return immediately """
+        if self.module_state() == 'locked':
+            self.log.error("Module acquisition is still running, module state is currently locked.")
+            return
+        self.module_state.lock()
+        self._sigStart.emit()
 
     def _start_acquisition(self):
         """ Start acquisition method initializing the acquisitions constants and calling the acquisition method
         """
-        if self.module_state() == 'locked':
-            self.log.error("Module acquisition is still running, wait before launching a new acquisition "
-                           ": module state is currently locked. ")
-            return
-
         if self._read_mode == 'IMAGE_ADVANCED':
             self.camera().set_image_advanced_parameters(self._image_advanced)
         if self._read_mode == 'MULTIPLE_TRACKS':
             self.camera().set_active_tracks(self._active_tracks)
 
         self._acquired_data = []
-        self._loop_counter = 1
-        if self._acquisition_mode[-10:] == 'MULTI_SCAN':
-            self._loop_counter *= self._number_of_scan
-        if self._acquisition_mode[:3] == 'ACC':
-            self._loop_counter *= self._number_accumulated_scan
-        self._acquisition()
+        self._loop_counter = 1  # todo: do this clean
+        if self._acquisition_mode[-10:] == 'MULTI_SCAN':  # todo: do this clean
+            self._loop_counter *= self._number_of_scan  # todo: do this clean
+        if self._acquisition_mode[:3] == 'ACC':  # todo: do this clean
+            self._loop_counter *= self._number_accumulated_scan  # todo: do this clean
+        self._acquisition_loop()
 
     def get_ready_state(self):
         """ Getter method returning if the camera hardware is acquiring or not
 
-        @return: (bool) camera hardware acquiring ?
+        @return: (bool) camera hardware idle ?
         """
         return self.camera().get_ready_state()
 
-    def _acquisition(self):
-        """Acquisition method starting hardware acquisition and emitting Qtimer signal connected to check status method
+    def _acquisition_loop(self):
+        """ Acquisition method starting hardware acquisition and emitting Qtimer signal connected to check status method
         """
         self._loop_counter -= 1
         if self._acquisition_mode == 'SINGLE_SCAN':
@@ -276,60 +233,55 @@ class SpectrumLogic(GenericLogic):
             tempo = self._accumulation_delay
         else:
             tempo = self._scan_delay
-        self.module_state.lock()
         self.camera().start_acquisition()
-        self.timer.start((tempo + self._exposure_time)*1e3) #Qtimer start() method in ms
+        self._sigCheckStatus.emit()
 
     def _check_status(self):
-        """ Method / Slot used by the acquisition call by Qtimer signal to check if the acquisition is complete
-        and, then, unlock the module and acquire data
-        """
-        if self.get_ready_state():
+        """ Method / Slot used by the acquisition call by Qtimer signal to check if the acquisition is complete """
+        # If module unlocked by stop_acquisition
+        if self.module_state() != 'locked':
+            self._acquired_data = self.get_acquired_data()
+            self.log.debug("Acquisition stopped. Status loop stopped.")
 
-            if self._acquisition_mode == 'SINGLE_SCAN':
-                self._acquired_data = self.get_acquired_data()
-                self.module_state.unlock()
-                self.log.info("Acquisition finished : module state is 'idle' ")
-                return
+        # If hardware still running
+        if not self.get_ready_state():
+            self._sigCheckStatus.emit()
+            return
 
-            elif self._acquisition_mode == 'LIVE_SCAN':
-                self._loop_counter += 1
-                self._acquired_data = self.get_acquired_data()
+        # Acquisition is finished
+        if self._acquisition_mode == 'SINGLE_SCAN':
+            self._acquired_data = self.get_acquired_data()
+            self.module_state.unlock()
+            self.log.debug("Acquisition finished : module state is 'idle' ")
+            return
+
+        elif self._acquisition_mode == 'LIVE_SCAN':
+            self._loop_counter += 1
+            self._acquired_data = self.get_acquired_data()
+            self._acquisition()
+            return
+
+        else:
+            self._acquired_data.append(self.get_acquired_data())
+
+            if self._acquisition_mode[:3] == 'ACC' and self._loop_counter%self._number_accumulated_scan == 0:
+                data = self._acquired_data[-self._number_accumulated_scan-1:]
+                filtered_data = self.reject_cosmic(data)
+                np.delete(np.array(self._acquired_data), np.s_[-self._number_accumulated_scan-1:], axis=0)
+                self._acquired_data.append( filtered_data)
+
+            if self._loop_counter >= 0:
                 self.module_state.unlock()
                 self._acquisition()
                 return
 
-            else:
-
-                self._acquired_data.append(self.get_acquired_data())
-
-                if self._acquisition_mode[:3] == 'ACC' and self._loop_counter%self._number_accumulated_scan == 0:
-                    data = self._acquired_data[-self._number_accumulated_scan-1:]
-                    filtered_data = self.reject_cosmic(data)
-                    np.delete(np.array(self._acquired_data), np.s_[-self._number_accumulated_scan-1:], axis=0)
-                    self._acquired_data.append( filtered_data)
-
-                if self._loop_counter >= 0:
-                    self.module_state.unlock()
-                    self._acquisition()
-                    return
-
-            self.module_state.unlock()
-            self.log.info("Acquisition finished : module state is 'idle' ")
-
-        else:
-            self.timer.start(self._exposure_time*1e3) #Qtimer start() method in ms
-
-
     def reject_cosmic(self, data):
-        """This function is used to reject cosmic features from acquired spectrum by computing the standard deviation
-        of an ensemble of accumulated scan parametrized by the number_accumulated_scan and the accumulation_delay
-        parameters. The rejection is carry out with a mask rejecting values outside their standard deviation with a
-        weight given by a coeff coeff_rej_cosmic. This method should be only used in "accumulation mode".
+        """ This function is used to reject cosmic features from acquired spectrum
 
-        Tested : yes
-        SI check : yes
+        It is done by computing the standard deviation of an ensemble of accumulated scan.
+        The rejection is carry out with a mask rejecting values outside their standard deviation on each pixel
         """
+        # Todo: make this generic
         if len(data) < self._number_accumulated_scan:
             self.log.error("Cosmic rejection impossible : the number of scan in the data parameter is less than the"
                            " number of accumulated scan selected. Choose a different number of accumulated scan or"
@@ -351,47 +303,28 @@ class SpectrumLogic(GenericLogic):
         return np.transpose(clean_data,(2,0,1))
 
     def stop_acquisition(self):
-        """Method calling the abort acquisition method from the camera hardware module and changing the
-        logic module state to 'unlocked'.
-
-        Tested : yes
-        SI check : yes
-        """
-        self.sigStop.emit()
-
-    def _stop_acquisition(self):
-        """Method calling the abort acquisition method from the camera hardware module and changing the
-        logic module state to 'unlocked'.
-
-        Tested : yes
-        SI check : yes
-        """
-        self.timer.stop()
+        """ Method to abort the acquisition """
         self.module_state.unlock()
         self.camera().abort_acquisition()
-        self.log.info("Acquisition stopped : module state is 'idle' ")
+        self.log.debug("Acquisition stopped : module state is 'idle' ")
 
     @property
     def acquired_data(self):
-        """Getter method returning the last acquired data.
-        """
+        """ Getter method returning the last acquired data. """
         return self._acquired_data
 
-    @acquired_data.setter
-    def acquired_data(self, data):
-        """Setter method setting the new acquired data.
-        """
-        self._acquired_data = data
+    def save_acquired_data(self, filename=None):
+        parameters = OrderedDict()
+        parameters['camera_gain'] = self.camera_gain
+        parameters['readout_speed'] = self.readout_speed
+        parameters['exposure_time'] = self.exposure_time
 
-    def save_acquired_data(self, filepath=None, filename=None):
-        parameters = {"camera_gain" : self._camera_gain,
-                      "readout_speed": self._readout_speed,
-                      "exposure_time" : self._exposure_time,
-                      "scan_delay" : self._scan_delay,
-                      "accumulation_delay" : self._accumulation_delay,
-                      "number_accumulated_scan" : self._number_accumulated_scan,
-                      "grating_number" : self._grating_number,
-                      "wavelength_calibration" : self._wavelength_calibration}
+        parameters['scan_delay'] = self._scan_delay
+        parameters['accumulation_delay'] = self._accumulation_delay
+        parameters['grating_number'] = self._grating_number
+
+        filepath = self.savelogic().get_path_for_module(module_name='spectrum_logic')
+
         self.save_data(self._acquired_data, filepath=filepath, parameters=parameters , filename=filename)
 
     ##############################################################################
@@ -406,31 +339,23 @@ class SpectrumLogic(GenericLogic):
 
     @property
     def grating_index(self):
-        """Getter method returning the grating index used by the spectrometer.
+        """ Getter method returning the grating index used by the spectrometer.
 
-        @return: (int) active grating index
-
-        Tested : yes
-        SI check : yes
+        @return (int): active grating index
         """
         return self._grating_index
 
-
     @grating_index.setter
     def grating_index(self, grating_index):
-        """Setter method setting the grating index to use by the spectrometer.
+        """ Setter method setting the grating index to use by the spectrometer.
 
-        @param grating_index: (int) gating index to set active
-
-
-        Tested : yes
-        SI check : yes
+        @param (int) grating_index: gating index to set active
         """
         if self.module_state() == 'locked':
             self.log.error("Acquisition process is currently running : you can't change this parameter"
                            " until the acquisition is completely stopped ")
             return
-        grating_number = int(grating_index)
+        grating_index = int(grating_index)
         if grating_index == self._grating_index:
             return
         number_of_gratings = len(self.spectro_constraints.gratings)
@@ -801,7 +726,7 @@ class SpectrumLogic(GenericLogic):
 
            Each value might be a float or an integer.
            """
-        return self.camera().get_acquired_data()
+        return netobtain(self.camera().get_acquired_data())
 
     ##############################################################################
     #                           Read mode functions
@@ -1196,8 +1121,6 @@ class SpectrumLogic(GenericLogic):
 
         @return: (int) number of acquired scan
 
-        Tested : yes
-        SI check : yes
         """
         return self._number_of_scan
 
@@ -1207,8 +1130,6 @@ class SpectrumLogic(GenericLogic):
 
         @param number_scan: (int) number of acquired scan
 
-        Tested : yes
-        SI check : yes
         """
         if self.module_state() == 'locked':
             self.log.error("Acquisition process is currently running : you can't change this parameter"
@@ -1285,8 +1206,6 @@ class SpectrumLogic(GenericLogic):
 
         @param shutter_state: (str) shutter state
 
-        Tested : yes
-        SI check : yes
         """
         if not self.camera_constraints.has_shutter:
             self.log.error("No shutter is available in your hardware ")
@@ -1311,8 +1230,6 @@ class SpectrumLogic(GenericLogic):
 
         @return (bool): True if the cooler is on
 
-        Tested : yes
-        SI check : yes
         """
         if not self.camera_constraints.has_cooler:
             self.log.error("No cooler is available in your hardware ")
@@ -1321,7 +1238,7 @@ class SpectrumLogic(GenericLogic):
 
     @cooler_status.setter
     def cooler_status(self, cooler_status):
-        """Setter method returning the cooler status if ON or OFF.
+        """ Setter method returning the cooler status if ON or OFF.
 
         @param (bool) value: True to turn it on, False to turn it off
 
@@ -1340,8 +1257,6 @@ class SpectrumLogic(GenericLogic):
 
         @return (float): temperature (in Kelvin)
 
-        Tested : yes
-        SI check : yes
         """
         if not self.camera_constraints.has_cooler:
             self.log.error("No cooler is available in your hardware ")
@@ -1349,33 +1264,29 @@ class SpectrumLogic(GenericLogic):
         return self.camera().get_temperature()
 
     @property
-    def camera_temperature_setpoint(self):
+    def temperature_setpoint(self):
         """ Getter method for the temperature setpoint of the camera.
 
         @return (float): Current setpoint in Kelvin
 
-        Tested : yes
-        SI check : yes
         """
         if not self.camera_constraints.has_cooler:
             self.log.error("No cooler is available in your hardware ")
             return
         return self._temperature_setpoint
 
-    @camera_temperature_setpoint.setter
-    def camera_temperature_setpoint(self, temperature_setpoint):
+    @temperature_setpoint.setter
+    def temperature_setpoint(self, value):
         """ Setter method for the the temperature setpoint of the camera.
 
         @param (float) value: New setpoint in Kelvin
 
-        Tested : yes
-        SI check : yes
         """
         if not self.camera_constraints.has_cooler:
             self.log.error("No cooler is available in your hardware ")
             return
-        if temperature_setpoint <= 0:
+        if value <= 0:
             self.log.error("Temperature setpoint can't be negative or 0 ")
             return
-        self.camera().set_temperature_setpoint(temperature_setpoint)
+        self.camera().set_temperature_setpoint(value)
         self._temperature_setpoint = self.camera().get_temperature_setpoint()
