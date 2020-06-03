@@ -124,31 +124,26 @@ class SpectrometerScannerInterfuse(Base, ConfocalScannerInterface):
 
         @return float[]: the photon counts per second
         """
+        line_path = line_path.T
+        count_data = np.zeros((len(line_path), len(self.get_scanner_count_channels())))
+        for i, position in enumerate(line_path):
+            self.scanner().scanner_set_position(*position)
+            data = self.spectrometer().take_acquisition()  # this function does not exist yet. Logic must give a simple
+                                                       # synchronous acquisition.
+            if data is not None:
+                count_data[i] = data
+            else:
+                self.error('Error while taking spectrum. Stopping line')
+                break
 
-        if self.module_state() == 'locked':
-            self.log.error('A scan_line is already running, close this one first.')
-            return -1
-        self.module_state.lock()
-
-        try:
-            count_data = np.zeros((self._line_length, len(self.get_scanner_count_channels())))
-            for i, position in enumerate(line_path):
-                self.scanner().scanner_set_position(*position)
-                data = self.spectrometer().get_spectrum()  # this function does not exist yet. Logic must give a simple
-                                                           # synchronous acquisition.
-                if data is not None:
-                    count_data[i] = data
-                else:
-                    self.error('Error while taking spectrum. Stopping line')
-                    break
-        finally:
-            self.module_state.unlock()
         return count_data
 
     def close_scanner(self):
         """ Closes the scanner and cleans up afterwards. """
-        return self.scanner().close_scanner()
+        return 0
+        #return self.scanner().close_scanner()
 
     def close_scanner_clock(self):
         """ Closes the clock and cleans up afterwards. """
-        return self.scanner().close_scanner_clock()
+        return 0
+        #return self.scanner().close_scanner_clock()
