@@ -47,15 +47,10 @@ class AcquisitionMode(Enum):
     SINGLE_SCAN : single scan acquisition
     MULTI_SCAN : multiple scan acquisition
     LIVE_SCAN : live scan acquisition
-    ACC_SINGLE_SCAN : accumulated single scan acquisition
-    ACC_MULTI_SCAN : accumulated multiple scan acquisition
-    ACC_LIVE_SCAN : accumulated live scan acquisition
     """
     SINGLE_SCAN = 0
     MULTI_SCAN = 1
     LIVE_SCAN = 2
-    ACC_SINGLE_SCAN = 3
-    ACC_MULTI_SCAN = 4
 
 
 class SpectrumLogic(GenericLogic):
@@ -74,19 +69,18 @@ class SpectrumLogic(GenericLogic):
     _camera_gain = StatusVar('camera_gain', None)
     _readout_speed = StatusVar('readout_speed', None)
     _exposure_time = StatusVar('exposure_time', None)
-    _accumulation_delay = StatusVar('accumulation_delay', 1e-2)
-    _scan_delay = StatusVar('scan_delay', 1)
+    _scan_delay = StatusVar('scan_delay', 0)
     _number_of_scan = StatusVar('number_of_scan', 1)
-    _number_accumulated_scan = StatusVar('number_accumulated_scan', 1)
     _acquisition_mode = StatusVar('acquisition_mode', 'SINGLE_SCAN')
     _temperature_setpoint = StatusVar('temperature_setpoint', None)
+    _active_tracks = StatusVar('active_tracks', None)
+    _image_advanced = StatusVar('image_advanced', None)
 
     # cosmic rejection coeff :
     _coeff_rej_cosmic = StatusVar('coeff_cosmic_rejection', 2.2)
 
     _sigStart = QtCore.Signal()
     _sigCheckStatus = QtCore.Signal()
-
     ##############################################################################
     #                            Basic functions
     ##############################################################################
@@ -118,7 +112,7 @@ class SpectrumLogic(GenericLogic):
         self._image_advanced = None
         self._shutter_state = None
         self._loop_counter = None
-        self._timer = None
+        self._loop_timer = None
 
     def on_activate(self):
         """ Initialisation performed during activation of the module. """
@@ -153,9 +147,10 @@ class SpectrumLogic(GenericLogic):
         if self.camera_constraints.has_cooler:
             self.temperature_setpoint = self._temperature_setpoint or self.camera().get_temperature_setpoint()
 
-        # Todo: use status variable
-        self._active_tracks = self.camera().get_active_tracks()
-        self._image_advanced = self.camera().get_image_advanced_parameters()
+        if self._image_advanced == None:
+            self._image_advanced = self.camera().get_image_advanced_parameters()
+        if self._active_tracks == None:
+            self._active_tracks = self.camera().get_active_tracks()
 
         if self.camera_constraints.has_shutter:
             self._shutter_state = self.camera().get_shutter_state()
@@ -165,6 +160,9 @@ class SpectrumLogic(GenericLogic):
 
         self._sigStart.connect(self._start_acquisition)
         self._sigCheckStatus.connect(self._check_status, QtCore.Qt.QueuedConnection)
+        self._loop_timer = QtCore.Qtimer()
+        self._loop_counter.setSingleShot(True)
+        self._loop_timer.timeout.connect(self._acquisition_loop)
 
     def on_deactivate(self):
         """ Deinitialisation performed during deactivation of the module. """
@@ -190,7 +188,7 @@ class SpectrumLogic(GenericLogic):
         self.start_acquisition()
         while self.module_state() != 'idle':
             time.sleep(0.1)
-        return self.get_acquired_data()
+        return self._acquired_data
 
     def start_acquisition(self):
         """ Start acquisition in the module's thread and return immediately """
@@ -203,17 +201,10 @@ class SpectrumLogic(GenericLogic):
     def _start_acquisition(self):
         """ Start acquisition method initializing the acquisitions constants and calling the acquisition method
         """
-        if self._read_mode == 'IMAGE_ADVANCED':
-            self.camera().set_image_advanced_parameters(self._image_advanced)
-        if self._read_mode == 'MULTIPLE_TRACKS':
-            self.camera().set_active_tracks(self._active_tracks)
 
         self._acquired_data = []
-        self._loop_counter = 1  # todo: do this clean
-        if self._acquisition_mode[-10:] == 'MULTI_SCAN':  # todo: do this clean
-            self._loop_counter *= self._number_of_scan  # todo: do this clean
-        if self._acquisition_mode[:3] == 'ACC':  # todo: do this clean
-            self._loop_counter *= self._number_accumulated_scan  # todo: do this clean
+        if self._acquisition_mode == 'MULTI_SCAN':
+            self._loop_counter = self._number_of_scan
         self._acquisition_loop()
 
     def get_ready_state(self):
@@ -227,12 +218,6 @@ class SpectrumLogic(GenericLogic):
         """ Acquisition method starting hardware acquisition and emitting Qtimer signal connected to check status method
         """
         self._loop_counter -= 1
-        if self._acquisition_mode == 'SINGLE_SCAN':
-            tempo = 0
-        if self._acquisition_mode[:3] == 'ACC' and self._loop_counter%self._number_accumulated_scan != 0:
-            tempo = self._accumulation_delay
-        else:
-            tempo = self._scan_delay
         self.camera().start_acquisition()
         self._sigCheckStatus.emit()
 
@@ -264,15 +249,9 @@ class SpectrumLogic(GenericLogic):
         else:
             self._acquired_data.append(self.get_acquired_data())
 
-            if self._acquisition_mode[:3] == 'ACC' and self._loop_counter%self._number_accumulated_scan == 0:
-                data = self._acquired_data[-self._number_accumulated_scan-1:]
-                filtered_data = self.reject_cosmic(data)
-                np.delete(np.array(self._acquired_data), np.s_[-self._number_accumulated_scan-1:], axis=0)
-                self._acquired_data.append( filtered_data)
-
             if self._loop_counter >= 0:
                 self.module_state.unlock()
-                self._acquisition()
+                self._loop_timer.start(self.scan_delay)
                 return
 
     def reject_cosmic(self, data):
@@ -281,12 +260,6 @@ class SpectrumLogic(GenericLogic):
         It is done by computing the standard deviation of an ensemble of accumulated scan.
         The rejection is carry out with a mask rejecting values outside their standard deviation on each pixel
         """
-        # Todo: make this generic
-        if len(data) < self._number_accumulated_scan:
-            self.log.error("Cosmic rejection impossible : the number of scan in the data parameter is less than the"
-                           " number of accumulated scan selected. Choose a different number of accumulated scan or"
-                           " make more scan. ")
-            return
         mean_data = np.nanstd(data, axis=0)
         std_dev_data = np.nanstd((data-mean_data)**2, axis=0)
         mask_min = mean_data - std_dev_data * self._coeff_rej_cosmic
@@ -320,7 +293,6 @@ class SpectrumLogic(GenericLogic):
         parameters['exposure_time'] = self.exposure_time
 
         parameters['scan_delay'] = self._scan_delay
-        parameters['accumulation_delay'] = self._accumulation_delay
         parameters['grating_number'] = self._grating_number
 
         filepath = self.savelogic().get_path_for_module(module_name='spectrum_logic')
@@ -860,6 +832,8 @@ class SpectrumLogic(GenericLogic):
         self._image_advanced.horizontal_binning = int(binning[0])
         self._image_advanced.vertical_binning = int(binning[1])
 
+        self.camera().set_image_advanced_parameters(self._image_advanced)
+
     @property
     def image_advanced_area(self):
         return {'horizontal_range': (self._image_advanced.horizontal_start, self._image_advanced.horizontal_end),
@@ -897,6 +871,7 @@ class SpectrumLogic(GenericLogic):
         self._image_advanced.vertical_start = int(image_advanced_area[2])
         self._image_advanced.vertical_end = int(image_advanced_area[3])
 
+        self.camera().set_image_advanced_parameters(self._image_advanced)
 
     ##############################################################################
     #                           Acquisition functions
@@ -1004,43 +979,6 @@ class SpectrumLogic(GenericLogic):
         self._exposure_time = self.camera().get_exposure_time()
 
     @property
-    def accumulation_delay(self):
-        """Getter method returning the accumulation delay between consecutive scan during accumulate acquisition mode.
-
-        @return: (float) accumulation delay
-
-        Tested : yes
-        SI check : yes
-        """
-        return self._accumulation_delay
-
-    @accumulation_delay.setter
-    def accumulation_delay(self, accumulation_delay):
-        """Setter method setting the accumulation delay between consecutive scan during an accumulate acquisition mode.
-
-        @param accumulation_delay: (float) accumulation delay
-
-        Tested : yes
-        SI check : yes
-        """
-        if self.module_state() == 'locked':
-            self.log.error("Acquisition process is currently running : you can't change this parameter"
-                           " until the acquisition is completely stopped ")
-            return
-        accumulation_delay = float(accumulation_delay)
-        if not accumulation_delay > 0 :
-            self.log.error("Accumulation delay parameter must be a positive number ")
-            return
-        if not self._exposure_time < accumulation_delay < self._scan_delay/self._number_accumulated_scan:
-            self.log.error("Accumulation delay parameter must be in the range between "
-                           "the current exposure time {} and scan delay values {}"
-                             .format(self._exposure_time, self._scan_delay/self._number_accumulated_scan))
-            return
-        if accumulation_delay == self._accumulation_delay:
-            return
-        self._accumulation_delay = accumulation_delay
-
-    @property
     def scan_delay(self):
         """Getter method returning the scan delay between consecutive scan during multiple acquisition mode.
 
@@ -1072,48 +1010,9 @@ class SpectrumLogic(GenericLogic):
             self.log.error("Scan delay parameter must be a value bigger than"
                            "the current exposure time {} ".format(self._exposure_time))
             return
-        if not self._accumulation_delay < scan_delay and self._acquisition_mode[:3] == 'ACC':
-            self.log.error("Scan delay parameter must be a value bigger than"
-                           "the current exposure time {} ".format(self._accumulation_delay))
-            return
         if scan_delay == self._scan_delay:
             return
         self._scan_delay = scan_delay
-
-    @property
-    def number_accumulated_scan(self):
-        """Getter method returning the number of accumulated scan during accumulate acquisition mode.
-
-        @return: (int) number of accumulated scan
-
-        Tested : yes
-        SI check : yes
-        """
-        return self._number_accumulated_scan
-
-    @number_accumulated_scan.setter
-    def number_accumulated_scan(self, number_scan):
-        """Setter method setting the number of accumulated scan during accumulate acquisition mode.
-
-        @param number_scan: (int) number of accumulated scan
-
-        Tested : yes
-        SI check : yes
-        """
-        if self.module_state() == 'locked':
-            self.log.error("Acquisition process is currently running : you can't change this parameter"
-                           " until the acquisition is completely stopped ")
-            return
-        number_scan = int(number_scan)
-        if not number_scan > 0:
-            self.log.error("Number of accumulated scan parameter must be positive ")
-            return
-        if number_scan*self._accumulation_delay > self._scan_delay:
-            self.log.error("Number of accumulated scan parameter must be lower than {} "
-                             .format(int(self._scan_delay/self._accumulation_delay)))
-        if number_scan == self._number_accumulated_scan:
-            return
-        self._number_accumulated_scan = number_scan
 
     @property
     def number_of_scan(self):

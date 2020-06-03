@@ -402,7 +402,7 @@ class Main(Base, ScienceCameraInterface):
 
         @return (ImageAdvancedParameters): Current image advanced parameters
 
-        Should only be used while in IMAGE_ADVANCED mode
+        Can be used in any mode
         """
         return self._image_advanced_parameters  # No getter in the DLL
 
@@ -411,7 +411,7 @@ class Main(Base, ScienceCameraInterface):
 
         @param (ImageAdvancedParameters) value: Parameters to set
 
-        Should only be used while in IMAGE_ADVANCED mode
+        Can be used in any mode
         """
         if not isinstance(value, ImageAdvancedParameters):
             self.log.error('ImageAdvancedParameters value error. Value {} is not correct.'.format(value))
