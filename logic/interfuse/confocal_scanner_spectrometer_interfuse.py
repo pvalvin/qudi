@@ -37,10 +37,12 @@ class SpectrometerScannerInterfuse(Base, ConfocalScannerInterface):
     def __init__(self, config, **kwargs):
         super().__init__(config=config, **kwargs)
         self._frequency = None
+        self._count_data = None
+        self._pointer = None
 
     def on_activate(self):
         """ Initialisation performed during activation of the module. """
-        pass
+        self._count_data = None
 
     def on_deactivate(self):
         """ Deactivation of the module """
@@ -125,18 +127,20 @@ class SpectrometerScannerInterfuse(Base, ConfocalScannerInterface):
         @return float[]: the photon counts per second
         """
         line_path = line_path.T
-        count_data = np.zeros((len(line_path), len(self.get_scanner_count_channels())))
+        self._count_data = np.zeros((len(line_path), len(self.get_scanner_count_channels())))
         for i, position in enumerate(line_path):
+            self._pointer = i
             self.scanner().scanner_set_position(*position)
             data = self.spectrometer().take_acquisition()  # this function does not exist yet. Logic must give a simple
-                                                       # synchronous acquisition.
+            if len(data) == 1:
+                data = data[0]
             if data is not None:
-                count_data[i] = data
+                self._count_data[i] = data
             else:
                 self.error('Error while taking spectrum. Stopping line')
                 break
-
-        return count_data
+        self._count_data = None
+        return self._count_data
 
     def close_scanner(self):
         """ Closes the scanner and cleans up afterwards. """
@@ -147,3 +151,8 @@ class SpectrometerScannerInterfuse(Base, ConfocalScannerInterface):
         """ Closes the clock and cleans up afterwards. """
         return 0
         #return self.scanner().close_scanner_clock()
+
+    def get_last_spectrum(self):
+        """ Helper tools to get the last acquired spectrum """
+        if self._count_data is not None and self._pointer > 0:
+            return self._count_data[self._pointer - 1]
