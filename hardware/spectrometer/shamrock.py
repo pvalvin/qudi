@@ -224,6 +224,20 @@ class Shamrock(Base, GratingSpectrometerInterface):
         else:
             self.log.error('The wavelength {} is not in the range {}, {}'.format(value*1e9, 0, maxi*1e9))
 
+    def get_spectrometer_dispersion(self, number_pixels, pixel_width):
+        """ Returns the wavelength calibration of each pixel
+
+        Shamrock DLL can give an estimation of the calibration if the required parameters are given.
+        This feature is not used by Qudi but is useful to check everything is ok.
+
+        """
+        self._set_number_of_pixels(number_pixels)
+        self._set_pixel_width(pixel_width)
+        wl_array = np.ones((number_pixels,), dtype=np.float32)
+        self._dll.ShamrockGetCalibration.argtypes = [ct.c_int32, ct.c_void_p, ct.c_int32]
+        self._check(self._dll.ShamrockGetCalibration(self._device_id, wl_array.ctypes.data, number_pixels))
+        return wl_array*1e-9  # DLL uses nanometer
+
     def get_input_port(self):
         """ Returns the current input port
 
@@ -516,20 +530,6 @@ class Shamrock(Base, GratingSpectrometerInterface):
         offset = ct.c_int()
         self._check(self._dll.ShamrockGetDetectorOffset(self._device_id, ct.byref(offset)))
         return offset.value
-
-    def get_spectrometer_dispersion(self):
-        """ Returns the wavelength calibration of each pixel
-
-        Shamrock DLL can give a estimate of the calibration if the required parameters are given.
-        This feature is not used by Qudi but is useful to check everything is ok.
-
-        Call _set_number_of_pixels and _set_pixel_width before calling this function.
-        """
-        number_pixels = self._get_number_of_pixels()
-        wl_array = np.ones((number_pixels,), dtype=np.float32)
-        self._dll.ShamrockGetCalibration.argtypes = [ct.c_int32, ct.c_void_p, ct.c_int32]
-        self._check(self._dll.ShamrockGetCalibration(self._device_id, wl_array.ctypes.data, number_pixels))
-        return wl_array*1e-9  # DLL uses nanometer
 
     ##############################################################################
     #                    DLL wrapper unused by this module

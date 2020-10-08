@@ -147,7 +147,7 @@ class SpectrumLogic(GenericLogic):
         self.camera_gain = self._camera_gain or self.camera().get_gain()
         self.exposure_time = self._exposure_time or self.camera().get_exposure_time()
 
-        if self._dispersion_fitting_parameters == None:
+        if not self._dispersion_fitting_parameters:
             self.fit_spectrometer_dispersion()
 
         if self.camera_constraints.has_cooler:
@@ -427,10 +427,17 @@ class SpectrumLogic(GenericLogic):
 
         """
 
-        diff_surf = self.spectrometer.get_spectrometer_dispersion() - self.wavelength_spectrum
+        def _func(M, *args):
+            x, y = M
+            arr = np.zeros(x.shape)
+            for i in range(len(args) // 5):
+                arr += self._fitting_correction(x, y, *args[i * 5:i * 5 + 5])
+            return arr
 
         image_width = self.camera_constraints.width
         pixel_width = self.camera_constraints.pixel_size_width
+
+        diff_surf = self.spectrometer().get_spectrometer_dispersion(image_width, pixel_width) - self._analytic_dispersion()
 
         x = self.center_wavelength
         y = np.arange(-image_width//2, image_width//2 - image_width%2)*pixel_width
@@ -438,7 +445,9 @@ class SpectrumLogic(GenericLogic):
         xdata = np.vstack((X.ravel(), Y.ravel()))
         ydata = diff_surf.T.ravel()
 
-        self._dispersion_fitting_parameters = optimize.curve_fit(self._fitting_function, xdata, ydata, p0=[0, 0, 0, 0, 0])
+        popt, pcov = optimize.curve_fit(_func, xdata, ydata, p0=[0, 0, 0, 0, 0])
+        self._dispersion_fitting_parameters = popt
+
 
     def _analytic_dispersion(self):
         """ Analytic dispersion calculation based on hardware constraints parameters and the actual center wavelength
@@ -478,7 +487,7 @@ class SpectrumLogic(GenericLogic):
         image_width = self.camera_constraints.width
         pixel_width = self.camera_constraints.pixel_size_width
         pixels_vector = np.arange(-image_width // 2, image_width // 2 - image_width % 2) * pixel_width
-        fitting_correction = self._fitting_correction(self.center_wavelength, pixels_vector, self._dispersion_fitting_parameters)
+        fitting_correction = self._fitting_correction(self.center_wavelength, pixels_vector, *self._dispersion_fitting_parameters)
         return self._analytic_dispersion() + fitting_correction
 
     @property
