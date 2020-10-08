@@ -73,8 +73,6 @@ class SpectrumLogic(GenericLogic):
     _number_of_scan = StatusVar('number_of_scan', 1)
     _acquisition_mode = StatusVar('acquisition_mode', 'SINGLE_SCAN')
     _temperature_setpoint = StatusVar('temperature_setpoint', None)
-    _active_tracks = StatusVar('active_tracks', None)
-    _image_advanced = StatusVar('image_advanced', None)
 
     # cosmic rejection coeff :
     _coeff_rej_cosmic = StatusVar('coeff_cosmic_rejection', 2.2)
@@ -158,6 +156,8 @@ class SpectrumLogic(GenericLogic):
         # QTimer for asynchronous execution :
         self._loop_counter = 0
 
+        self._acquisition_params = OrderedDict()
+
         self._sigStart.connect(self._start_acquisition)
         self._sigCheckStatus.connect(self._check_status, QtCore.Qt.QueuedConnection)
         self._loop_timer = QtCore.QTimer()
@@ -226,7 +226,9 @@ class SpectrumLogic(GenericLogic):
         # If module unlocked by stop_acquisition
         if self.module_state() != 'locked':
             self._acquired_data = self.get_acquired_data()
+            #self._update_acquisition_params()
             self.log.debug("Acquisition stopped. Status loop stopped.")
+            return
 
         # If hardware still running
         if not self.get_ready_state():
@@ -236,6 +238,7 @@ class SpectrumLogic(GenericLogic):
         # Acquisition is finished
         if self._acquisition_mode == 'SINGLE_SCAN':
             self._acquired_data = self.get_acquired_data()
+            #self._update_acquisition_params()
             self.module_state.unlock()
             self.log.debug("Acquisition finished : module state is 'idle' ")
             return
@@ -249,9 +252,12 @@ class SpectrumLogic(GenericLogic):
         else:
             self._acquired_data.append(self.get_acquired_data())
 
-            if self._loop_counter >= 0:
+            if self._loop_counter <= 0:
+                #self._update_acquisition_params()
                 self.module_state.unlock()
-                self._loop_timer.start(self.scan_delay)
+                self.log.debug("Acquisition finished : module state is 'idle' ")
+            else:
+                self._loop_timer.start(self.scan_delay*1000)
                 return
 
     def reject_cosmic(self, data):
@@ -286,18 +292,35 @@ class SpectrumLogic(GenericLogic):
         """ Getter method returning the last acquired data. """
         return self._acquired_data
 
-    def save_acquired_data(self, filename=None):
-        parameters = OrderedDict()
-        parameters['camera_gain'] = self.camera_gain
-        parameters['readout_speed'] = self.readout_speed
-        parameters['exposure_time'] = self.exposure_time
+    @property
+    def acquisition_params(self):
+        """ Getter method returning the last acquisition parameters. """
+        return self._acquisition_params
 
-        parameters['scan_delay'] = self._scan_delay
-        parameters['grating_number'] = self._grating_number
+    def _update_acquisition_params(self):
+        """ Getter method returning the last acquisition parameters. """
+        self._acquisition_params['read_mode'] = self.read_mode
+        if self.read_mode == 'IMAGE_ADVANCED':
+            self._acquisition_params['image_advanced'] = (self.image_advanced_binning, self.image_advanced_area)
+        if self.read_mode == 'MULTIPLE_TRACKS':
+            self._acquisition_params['multiple_tracks'] = self.active_tracks
+        self._acquisition_params['camera_gain'] = self.camera_gain
+        self._acquisition_params['readout_speed (Hz)'] = self.readout_speed
+        self._acquisition_params['exposure_time (s)'] = self.exposure_time
+        self._acquisition_params['scan_delay (s)'] = self.scan_delay
+        self._acquisition_params['number_of_scan'] = self.number_of_scan
+        self._acquisition_params['center_wavelength  (m)'] = self.center_wavelength
+        self._acquisition_params['grating_index'] = self.grating_index
+        self._acquisition_params['spectro_ports'] = self.input_port, self.output_port
+        self._acquisition_params['slit_width (m)'] = self._input_slit_width, self._output_slit_width
+        self._acquisition_params['wavelength_calibration (m)'] = self.wavelength_calibration
+
+    def save_acquired_data(self, filename=None):
 
         filepath = self.savelogic().get_path_for_module(module_name='spectrum_logic')
 
-        self.save_data(self._acquired_data, filepath=filepath, parameters=parameters , filename=filename)
+        self.savelogic().save_data(self._acquired_data, filepath=filepath,
+                                   parameters=self.acquisition_params,filename=filename)
 
     ##############################################################################
     #                            Spectrometer functions
@@ -586,10 +609,6 @@ class SpectrumLogic(GenericLogic):
         @param slit_width: (float) input port slit width
         @param input port: (Port|str) port
         """
-        if self.module_state() == 'locked':
-            self.log.error("Acquisition process is currently running : you can't change this parameter"
-                           " until the acquisition is completely stopped ")
-            return
         if isinstance(port, PortType):
             port = port.name
         port = str(port)
@@ -648,10 +667,6 @@ class SpectrumLogic(GenericLogic):
         Tested : yes
         SI check : yes
         """
-        if self.module_state() == 'locked':
-            self.log.error("Acquisition process is currently running : you can't change this parameter"
-                           " until the acquisition is completely stopped ")
-            return
         if isinstance(port, PortType):
             port = port.name
         port = str(port)
@@ -796,7 +811,7 @@ class SpectrumLogic(GenericLogic):
             self.log.error("Acquisition process is currently running : you can't change this parameter"
                            " until the acquisition is completely stopped ")
             return
-        active_tracks = np.array(active_tracks)
+        active_tracks = np.array(active_tracks, dtype=int)
         image_height = self.camera_constraints.height
         if not (np.all(0<=active_tracks) and np.all(active_tracks<image_height)):
             self.log.error("Active tracks positions are out of range : some position given are outside the "
@@ -1003,12 +1018,8 @@ class SpectrumLogic(GenericLogic):
                            " until the acquisition is completely stopped ")
             return
         scan_delay = float(scan_delay)
-        if not scan_delay > 0:
+        if not scan_delay >= 0:
             self.log.error("Scan delay parameter must be a positive number ")
-            return
-        if not self._exposure_time < scan_delay:
-            self.log.error("Scan delay parameter must be a value bigger than"
-                           "the current exposure time {} ".format(self._exposure_time))
             return
         if scan_delay == self._scan_delay:
             return
