@@ -79,7 +79,7 @@ class SpectrometerScannerInterfuse(Base, ConfocalScannerInterface):
 
         Most methods calling this might just care about the number of channels.
         """
-        return self.spectrometer().wavelength_spectrum
+        return list(self.spectrometer().wavelength_spectrum)
 
     def set_up_scanner_clock(self, clock_frequency=None, clock_channel=None):
         """ Configures the hardware clock of the NiDAQ card to give the timing.
@@ -131,7 +131,7 @@ class SpectrometerScannerInterfuse(Base, ConfocalScannerInterface):
         for i, position in enumerate(line_path):
             self._pointer = i
             self.scanner().scanner_set_position(*position)
-            data = self.spectrometer().take_acquisition()  # this function does not exist yet. Logic must give a simple
+            data = self.spectrometer().take_acquisition()
             if len(data) == 1:
                 data = data[0]
             if data is not None:
@@ -139,7 +139,6 @@ class SpectrometerScannerInterfuse(Base, ConfocalScannerInterface):
             else:
                 self.error('Error while taking spectrum. Stopping line')
                 break
-        self._count_data = None
         return self._count_data
 
     def close_scanner(self):
