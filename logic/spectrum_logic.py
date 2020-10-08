@@ -62,8 +62,12 @@ class SpectrumLogic(GenericLogic):
     savelogic = Connector(interface='SaveLogic')
 
     # declare status variables (logic attribute) :
+    _reverse_data_with_side_output = ConfigOption('reverse_data_with_side_output', False)
+
+    # declare status variables (logic attribute) :
     _acquired_data = StatusVar('wavelength_calibration', np.empty((2, 0)))
     _wavelength_calibration = StatusVar('wavelength_calibration', 0)
+    _dispersion_fitting_parameters = StatusVar('dispersion_fitting_parameters', None)
 
     # declare status variables (camera attribute) :
     _camera_gain = StatusVar('camera_gain', None)
@@ -142,11 +146,16 @@ class SpectrumLogic(GenericLogic):
         self.readout_speed = self._readout_speed or self.camera().get_readout_speed()
         self.camera_gain = self._camera_gain or self.camera().get_gain()
         self.exposure_time = self._exposure_time or self.camera().get_exposure_time()
+
+        if self._dispersion_fitting_parameters == None:
+            self.fit_spectrometer_dispersion()
+
         if self.camera_constraints.has_cooler:
             self.temperature_setpoint = self._temperature_setpoint or self.camera().get_temperature_setpoint()
 
         if self._image_advanced == None:
             self._image_advanced = self.camera().get_image_advanced_parameters()
+
         if self._active_tracks == None:
             self._active_tracks = self.camera().get_active_tracks()
 
@@ -403,6 +412,59 @@ class SpectrumLogic(GenericLogic):
         self.spectrometer().set_wavelength(wavelength)
         self._center_wavelength = self.spectrometer().get_wavelength()
 
+    def _fitting_correction(self, lam_c, pixels, a, b, c, d, e):
+        """ Function both used by the fitting function and the wavelength spectrum. This polynomial function
+        depending on both the pixels position and the center wavelength correct the analytic dispersion through
+        the error with hardware dispersion function.
+
+        @return fitting_correction: (list or ndarray) correction of the analytic dispersion
+        """
+        return (a * lam_c + b) * pixels ** 2 + (c * lam_c + d) * pixels + e
+
+    def fit_spectrometer_dispersion(self):
+        """ Method fitting the hardware wavelength dispersion with the polynomial fitting_correction function to update
+        fitting parameters.
+
+        """
+
+        diff_surf = self.spectrometer.get_spectrometer_dispersion() - self.wavelength_spectrum
+
+        image_width = self.camera_constraints.width
+        pixel_width = self.camera_constraints.pixel_size_width
+
+        x = self.center_wavelength
+        y = np.arange(-image_width//2, image_width//2 - image_width%2)*pixel_width
+        X, Y = np.meshgrid(x, y)
+        xdata = np.vstack((X.ravel(), Y.ravel()))
+        ydata = diff_surf.T.ravel()
+
+        self._dispersion_fitting_parameters = optimize.curve_fit(self._fitting_function, xdata, ydata, p0=[0, 0, 0, 0, 0])
+
+    def _analytic_dispersion(self):
+        """ Analytic dispersion calculation based on hardware constraints parameters and the actual center wavelength
+        based on geometric optics for a standard Czerny-Turner spectrometer configuration.
+
+        @return: (ndarray) analytic wavelength array
+        """
+
+        image_width = self.camera_constraints.width
+        pixel_width = self.camera_constraints.pixel_size_width
+        focal_length = self.spectro_constraints.focal_length
+        angular_dev = self.spectro_constraints.angular_deviation
+        focal_tilt = self.spectro_constraints.focal_tilt
+        grating = self.spectro_constraints.gratings[self.grating_index]
+        lam_c = self.center_wavelength
+
+        trans_eq = lambda alpha: (np.sin(angular_dev + alpha) + np.sin(alpha - angular_dev)) - lam_c * grating.ruling
+
+        alpha = optimize.newton(trans_eq, 0)
+
+        pixels_vector = np.arange(-image_width // 2, image_width // 2 - image_width % 2) * pixel_width
+        theta = np.arctan(pixels_vector * np.cos(focal_tilt) / focal_length)
+        effective_rulling = grating.ruling / np.cos(angular_dev + alpha)
+
+        return 1/effective_rulling*(np.sin(angular_dev+alpha+theta)-np.sin(angular_dev+alpha)) + lam_c
+
     @property
     def wavelength_spectrum(self):
         """Getter method returning the wavelength array of the full measured spectral range.
@@ -415,26 +477,9 @@ class SpectrumLogic(GenericLogic):
         """
         image_width = self.camera_constraints.width
         pixel_width = self.camera_constraints.pixel_size_width
-        focal_length = self.spectro_constraints.focal_length
-        angular_dev = self.spectro_constraints.angular_deviation
-        focal_tilt = self.spectro_constraints.focal_tilt
-        grating = self.spectro_constraints.gratings[self.grating_index]
-        lam_c = self.center_wavelength
-
-        A = np.cos(angular_dev) ** 2
-        B = np.cos(angular_dev) * np.sin(angular_dev)
-        trans_eq = lambda alpha : A*np.sin(alpha)*np.cos(alpha) - B*np.sin(alpha)**2 -lam_c*grating.ruling/2
-        alpha = optimize.newton(trans_eq, 0) + angular_dev
-
         pixels_vector = np.arange(-image_width // 2, image_width // 2 - image_width % 2) * pixel_width
-        theta = np.arctan(pixels_vector * np.cos(focal_tilt) / focal_length)
-
-        effective_rulling = grating.ruling / np.cos(angular_dev + alpha)
-        wavelength_spectrum = 1 / effective_rulling * (np.sin(angular_dev + alpha + theta) - np.sin(angular_dev + alpha)) + lam_c
-
-        self.spectrometer()._set_pixel_width(self.camera_constraints.pixel_size_width)
-        self.spectrometer()._set_number_of_pixels(self.camera_constraints.width)
-        return self.spectrometer()._get_calibration() + self._wavelength_calibration
+        fitting_correction = self._fitting_correction(self.center_wavelength, pixels_vector, self._dispersion_fitting_parameters)
+        return self._analytic_dispersion() + fitting_correction
 
     @property
     def wavelength_calibration(self):
@@ -713,6 +758,8 @@ class SpectrumLogic(GenericLogic):
 
            Each value might be a float or an integer.
            """
+        if self._reverse_data_with_side_output and self.output_port == "OUTPUT_SIDE":
+            return netobtain(self.camera().get_acquired_data()[:, ::-1])
         return netobtain(self.camera().get_acquired_data())
 
     ##############################################################################

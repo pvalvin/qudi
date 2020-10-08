@@ -517,7 +517,7 @@ class Shamrock(Base, GratingSpectrometerInterface):
         self._check(self._dll.ShamrockGetDetectorOffset(self._device_id, ct.byref(offset)))
         return offset.value
 
-    def _get_calibration(self):
+    def get_spectrometer_dispersion(self):
         """ Returns the wavelength calibration of each pixel
 
         Shamrock DLL can give a estimate of the calibration if the required parameters are given.

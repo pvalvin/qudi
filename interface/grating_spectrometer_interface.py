@@ -112,6 +112,17 @@ class GratingSpectrometerInterface(metaclass=InterfaceMetaclass):
         """
         pass
 
+    @abstract_interface_method
+    def get_spectrometer_dispersion(self):
+        """ Return the spectrometer dispersion for a given center wavelength measured by the fabricant.
+        This function has to be used only for fitting purpose since the dispersion spectrum must be measured inside the
+        logic module. The fitting of the dispersion give better accuracy of our dispersion calculations in the
+        'spectrumlogic' module.
+
+        @return (list or ndarray): wavelength spectrum related to the spectrometer dispersion
+        """
+        pass
+
     ##############################################################################
     #                        Ports and Slits functions
     ##############################################################################
