@@ -488,7 +488,8 @@ class SpectrumLogic(GenericLogic):
         pixel_width = self.camera_constraints.pixel_size_width
         pixels_vector = np.arange(-image_width // 2, image_width // 2 - image_width % 2) * pixel_width
         fitting_correction = self._fitting_correction(self.center_wavelength, pixels_vector, *self._dispersion_fitting_parameters)
-        return self._analytic_dispersion() + fitting_correction
+        #return self._analytic_dispersion() + fitting_correction
+        return self.spectrometer().get_spectrometer_dispersion(image_width, pixel_width)
 
     @property
     def wavelength_calibration(self):
