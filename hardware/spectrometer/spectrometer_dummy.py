@@ -29,7 +29,7 @@ import time
 import numpy as np
 
 
-class SpectrometerInterfaceDummy(Base,SpectrometerInterface):
+class SpectrometerDummy(Base,SpectrometerInterface):
     """ Dummy spectrometer module.
 
     Shows a silicon vacancy spectrum at liquid helium temperatures.

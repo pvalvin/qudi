@@ -100,7 +100,7 @@ class CameraLogic(GenericLogic):
         self._gain = gain
         return gain
 
-    def start_single_acquistion(self):
+    def start_single_acquisition(self):
         """
 
         """

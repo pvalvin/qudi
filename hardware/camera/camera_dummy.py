@@ -53,6 +53,7 @@ class CameraDummy(Base, CameraInterface):
     def on_activate(self):
         """ Initialisation performed during activation of the module.
         """
+        self._data = np.random.random(self._resolution) * self._exposure * self._gain
         pass
 
     def on_deactivate(self):
@@ -119,8 +120,7 @@ class CameraDummy(Base, CameraInterface):
 
         Each pixel might be a float, integer or sub pixels
         """
-        data = np.random.random(self._resolution)*self._exposure*self._gain
-        return data.transpose()
+        return self._data
 
     def set_exposure(self, exposure):
         """ Set the exposure time in seconds
