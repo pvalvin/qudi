@@ -147,14 +147,12 @@ class SpectrumLogic(GenericLogic):
         self.camera_gain = self._camera_gain or self.camera().get_gain()
         self.exposure_time = self._exposure_time or self.camera().get_exposure_time()
 
-        if not self._dispersion_fitting_parameters:
-            self.fit_spectrometer_dispersion()
+        self.fit_spectrometer_dispersion()
 
         if self.camera_constraints.has_cooler:
             self.temperature_setpoint = self._temperature_setpoint or self.camera().get_temperature_setpoint()
 
-        if self._image_advanced == None:
-            self._image_advanced = self.camera().get_image_advanced_parameters()
+        self._image_advanced = self.camera().get_image_advanced_parameters()
 
         if self._active_tracks == None:
             self._active_tracks = self.camera().get_active_tracks()
@@ -489,7 +487,7 @@ class SpectrumLogic(GenericLogic):
         pixels_vector = np.arange(-image_width // 2, image_width // 2 - image_width % 2) * pixel_width
         fitting_correction = self._fitting_correction(self.center_wavelength, pixels_vector, *self._dispersion_fitting_parameters)
         #return self._analytic_dispersion() + fitting_correction
-        return self.spectrometer().get_spectrometer_dispersion(image_width, pixel_width)
+        return self.spectrometer().get_spectrometer_dispersion(image_width, pixel_width) + self.wavelength_calibration
 
     @property
     def wavelength_calibration(self):
