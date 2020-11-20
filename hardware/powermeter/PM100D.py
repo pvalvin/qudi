@@ -32,18 +32,10 @@ except ImportError:
     raise ImportError('ThorlabsPM100 module not found. Please install it by typing command "pip install ThorlabsPM100"')
 
 
-class PM100D(Base, SimpleDataInterface, ProcessInterface):
-    """ Hardware module for Thorlabs PM100D powermeter.
+class Ophir_starlite(Base, SimpleDataInterface, ProcessInterface):
+    """ Hardware module for Ophir Starlite powermeter.
 
-    Example config :
-    powermeter:
-        module.Class: 'powermeter.PM100D.PM100D'
-        address: 'USB0::0x1313::0x8078::P0013645::INSTR'
 
-    This module needs the ThorlabsPM100 package from PyPi, this package is not included in the environment
-    To add install it, type :
-    pip install ThorlabsPM100
-    in the Anaconda prompt after having activated qudi environment
     """
 
     _address = ConfigOption('address', missing='error')
